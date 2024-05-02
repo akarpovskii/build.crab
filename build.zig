@@ -5,8 +5,6 @@ pub fn build(b: *std.Build) void {
 
     const optimize = b.standardOptimizeOption(.{});
 
-    std.debug.print("{any}\n", .{@import("builtin").target});
-
     const exe = b.addExecutable(.{
         .name = "build_crab",
         .root_source_file = b.path("src/main.zig"),
