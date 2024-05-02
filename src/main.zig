@@ -2,7 +2,7 @@ const std = @import("std");
 
 fn printUsage() !void {
     std.log.err(
-        "Usage `build_crab --out <output path> --target-dir <directory> --manifest-path <path/to/Cargo.toml> [--deps <.d file path>] [-- <cargo build args>]`",
+        "Usage `build_crab --out <output path> --target-dir <directory> --manifest-path <path/to/Cargo.toml> [--zigbuild] [--deps <.d file path>] [-- <cargo build args>]`",
         .{},
     );
 }
@@ -19,6 +19,7 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     var args = try std.process.argsWithAllocator(allocator);
+    var zigbuild: bool = false;
     var deps_file: ?[]const u8 = null;
     var out_file: ?[]const u8 = null;
     var target_dir: ?[]const u8 = null;
@@ -28,6 +29,9 @@ pub fn main() !void {
 
     _ = args.next();
     while (args.next()) |arg| {
+        if (std.mem.eql(u8, arg, "--zigbuild")) {
+            zigbuild = true;
+        }
         if (std.mem.eql(u8, arg, "--out")) {
             out_file = args.next() orelse break;
         }
@@ -63,7 +67,11 @@ pub fn main() !void {
     var cargo_cmd = std.ArrayList([]const u8).init(allocator);
     defer cargo_cmd.deinit();
     try cargo_cmd.append("cargo");
-    try cargo_cmd.append("build");
+    if (zigbuild) {
+        try cargo_cmd.append("zigbuild");
+    } else {
+        try cargo_cmd.append("build");
+    }
     try cargo_cmd.append("--message-format=json-render-diagnostics");
     try cargo_cmd.append("--target-dir");
     try cargo_cmd.append(target_dir.?);
