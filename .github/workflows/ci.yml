@@ -23,7 +23,7 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: goto-bus-stop/setup-zig@v2.2.0
+      - uses: goto-bus-stop/setup-zig@2a9625d
         with:
           version: ${{ matrix.zig-version }}
           cache: false
