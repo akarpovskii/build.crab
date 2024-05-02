@@ -17,7 +17,7 @@ pub fn build(b: *std.Build) void {
     const crate_lib_path = run_build_crab.addOutputFileArg("libcrate.a");
 
     run_build_crab.addArg("--deps");
-    _ = run_build_crab.addDepFileOutputArg("librate.d");
+    _ = run_build_crab.addDepFileOutputArg("libcrate.d");
 
     run_build_crab.addArg("--manifest-path");
     _ = run_build_crab.addFileArg(b.path("rust/Cargo.toml"));

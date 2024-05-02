@@ -25,7 +25,7 @@ const crate_lib_path = run_build_crab.addOutputFileArg("libcrate.a");
 // Deps info (.d) file (optional)
 // Zig will detect any changes in the crate and re-run the step
 run_build_crab.addArg("--deps");
-_ = run_build_crab.addDepFileOutputArg("librate.d");
+_ = run_build_crab.addDepFileOutputArg("libcrate.d");
 
 // Path to Cargo.toml
 // build.crab will use this path to filter-out any third party artifacts
