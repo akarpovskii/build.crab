@@ -27,9 +27,6 @@ jobs:
         with:
           version: ${{ matrix.zig_version }}
       - uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform }}
-          toolchain: stable minus 1 releases
 
       - name: Zig version
         run: zig version
