@@ -26,6 +26,7 @@ jobs:
       - uses: goto-bus-stop/setup-zig@v2.2.0
         with:
           version: ${{ matrix.zig-version }}
+          cache: false
       - uses: dtolnay/rust-toolchain@stable
 
       - name: Zig version
