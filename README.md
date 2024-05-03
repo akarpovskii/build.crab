@@ -59,11 +59,11 @@ Windows, as always, is the weird one.
 By default, Rust on Windows targets MSVC toolchain. This creates additional problems as you have to link against msvcrt, etc.
 
 If you want to avoid that, you should target windows-gnu (see the [`example`](./example/build.zig)).
-But that has its own problems as both Rust and Zig provide `compiler_rt.lib`. Most of the symbols in `compiler_rt` has weak linking, but not `___chkstk` and `___checkstk_ms`.
+But that has its own problems as both Rust and Zig provide `compiler_rt.lib`. Most of the symbols in `compiler_rt` has weak linking, but not `___chkstk` and `___chkstk_ms`.
 
-So if you want to link against a Rust library that needs these intrinsics, you should somehow resolve the conflist (though I'm not completely sure that it is safe to do).
+So if you want to link against a Rust library that needs these intrinsics, you should somehow resolve the conflict (though I'm not completely sure that it is safe to do).
 
-For that purpose, this package provides an additional artifact called `strip_symbols` that repacks `.a` archive removing `.o` files containing conflicting functions (provided by the user).
+For this purpose, `build.crab` provides an additional artifact called `strip_symbols` that repacks `.a` archive removing `.o` files containing conflicting functions (provided by the user).
 
 ```zig
 const strip_chkstk_ms = b.addRunArtifact(build_crab.artifact("strip_symbols"));
@@ -89,6 +89,6 @@ strip = true
 lto = true
 ```
 
-Otherwise, you again will have to link against some obscure Windows libraries even if you don't need them.
+Otherwise, you again will have to link some obscure Windows libraries even if you don't need them.
 
 And it also makes the size of the rust library smaller. Zig 0.12.0 has some problems consuming large archives on macOS (fixed in [#19758](https://github.com/ziglang/zig/issues/19718)) making it a good default choice.
