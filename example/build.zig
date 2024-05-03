@@ -33,6 +33,7 @@ pub fn build(b: *std.Build) void {
         "--quiet",
     });
 
+    lib_unit_tests.linkLibCpp();
     lib_unit_tests.addLibraryPath(crate_lib_path.dirname());
     lib_unit_tests.linkSystemLibrary("crate");
 
