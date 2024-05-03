@@ -33,6 +33,11 @@ pub fn build(b: *std.Build) void {
         "--quiet",
     });
 
+    if (@import("builtin").target.os.tag == .windows) {
+        run_build_crab.addArg("--target");
+        run_build_crab.addArg("x86_64-pc-windows-gnu");
+    }
+
     lib_unit_tests.linkLibCpp();
     lib_unit_tests.addLibraryPath(crate_lib_path.dirname());
     lib_unit_tests.linkSystemLibrary("crate");
