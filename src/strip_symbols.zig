@@ -28,7 +28,7 @@ pub fn main() !void {
 
     if (archive_path_opt == null or temp_dir_opt == null or output_opt == null or remove_symbol.items.len == 0) {
         std.log.err("One of the required arguments is missing", .{});
-        std.log.err("Usage: elf_crimes --archive libname.a --temp-dir tmp --remove-symbol ___chkstk_ms", .{});
+        std.log.err("Usage: strip_symbols --archive libname.a --temp-dir tmp --remove-symbol ___chkstk_ms --output out-file", .{});
         return error.RequiredArgMissing;
     }
 
