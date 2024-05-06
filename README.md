@@ -10,40 +10,14 @@ zig fetch --save https://github.com/akarpovskii/build.crab/archive/refs/tags/v0.
 
 In `build.zig` (replace `crate` with the name of your crate):
 ```zig
-const build_crab = b.dependency("build.crab", .{
-    // Build in Debug mode to see debug logs
-    .optimize = .ReleaseSafe,
-});
-
-const run_build_crab = b.addRunArtifact(build_crab.artifact("build_crab"));
-
-// Output library file
-// Zig will detect any changes in the file and re-link your module
-run_build_crab.addArg("--out");
-const crate_lib_path = run_build_crab.addOutputFileArg("libcrate.a");
-
-// Deps info (.d) file (optional)
-// Zig will detect any changes in the crate and re-run the step
-run_build_crab.addArg("--deps");
-_ = run_build_crab.addDepFileOutputArg("libcrate.d");
-
-// Path to Cargo.toml
-// build.crab will use this path to filter-out any third party artifacts
-run_build_crab.addArg("--manifest-path");
-_ = run_build_crab.addFileArg(b.path("path/to/Cargo.toml"));
-
-
-// Create a target directory for Cargo in zig-cache
-const cargo_target = b.addNamedWriteFiles("cargo-target");
-const target_dir = cargo_target.getDirectory();
-run_build_crab.addArg("--target-dir");
-run_build_crab.addDirectoryArg(target_dir);
-
-// You can pass additional arguments to Cargo
-run_build_crab.addArgs(&[_][]const u8{
-    "--",
-    "--release",
-    "--quiet",
+const crate_lib_path = @import("build.crab").addCargoBuild(b, .{
+    .name = "libcrate.a",
+    .manifest_path = b.path("path/to/Cargo.toml"),
+    // You can pass additional arguments to Cargo
+    .cargo_args = &.{
+        "--release",
+        "--quiet",
+    },
 });
 
 module.addLibraryPath(crate_lib_path.dirname());
@@ -66,15 +40,16 @@ So if you want to link against a Rust library that needs these intrinsics, you s
 For this purpose, `build.crab` provides an additional artifact called `strip_symbols` that repacks `.a` archive removing `.o` files containing conflicting functions (provided by the user).
 
 ```zig
-const strip_chkstk_ms = b.addRunArtifact(build_crab.artifact("strip_symbols"));
-strip_chkstk_ms.addArg("--archive");
-strip_chkstk_ms.addFileArg(crate_lib_path);
-strip_chkstk_ms.addArg("--temp-dir");
-strip_chkstk_ms.addDirectoryArg(target_dir);
-strip_chkstk_ms.addArg("--remove-symbol");
-strip_chkstk_ms.addArg("___chkstk_ms");
-strip_chkstk_ms.addArg("--output");
-crate_lib_path = strip_chkstk_ms.addOutputFileArg("libcrate.a");
+const crate_lib_path = @import("build.crab").addStripSymbols(b, .{
+    .name = "libcrate.a",
+    .archive = b.path("path/to/libcrate.a"),
+    .symbols = &.{
+        "___chkstk_ms",
+    },
+});
+
+module.addLibraryPath(crate_lib_path.dirname());
+module.linkSystemLibrary("crate", .{});
 ```
 
 See the [`buid.zig`](./example/build.zig) for a complete example.

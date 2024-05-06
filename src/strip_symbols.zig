@@ -100,7 +100,7 @@ fn filterObjFilesWindows(allocator: std.mem.Allocator, temp_dir: []const u8, rem
             continue;
         }
 
-        std.log.info("Reading file {s}", .{entry.path});
+        std.log.debug("Reading file {s}", .{entry.path});
 
         var file = try tdir.openFile(entry.path, .{});
         defer file.close();
