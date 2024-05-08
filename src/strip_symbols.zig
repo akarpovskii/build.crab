@@ -1,5 +1,11 @@
 const std = @import("std");
 
+const Format = enum {
+    coff,
+    elf,
+    macho,
+};
+
 pub fn main() !void {
     var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
     defer arena.deinit();
@@ -11,6 +17,7 @@ pub fn main() !void {
     var temp_dir_opt: ?[]const u8 = null;
     var output_opt: ?[]const u8 = null;
     var remove_symbol = std.ArrayList([]const u8).init(allocator);
+    var format_opt: ?[]const u8 = null;
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "--archive")) {
             archive_path_opt = args.next() orelse return error.ArchiveArgMissing;
@@ -24,11 +31,14 @@ pub fn main() !void {
         if (std.mem.eql(u8, arg, "--remove-symbol") or std.mem.eql(u8, arg, "-rs")) {
             try remove_symbol.append(args.next() orelse return error.RemoveSymbolArgMissing);
         }
+        if (std.mem.eql(u8, arg, "--format")) {
+            format_opt = args.next() orelse return error.OutputArgMissing;
+        }
     }
 
     if (archive_path_opt == null or temp_dir_opt == null or output_opt == null or remove_symbol.items.len == 0) {
         std.log.err("One of the required arguments is missing", .{});
-        std.log.err("Usage: strip_symbols --archive libname.a --temp-dir tmp --remove-symbol ___chkstk_ms --output out-file", .{});
+        std.log.err("Usage: strip_symbols --archive libname.a --temp-dir tmp --remove-symbol ___chkstk_ms --output out-file [--format [coff,elf,macho]]", .{});
         return error.RequiredArgMissing;
     }
 
@@ -50,15 +60,31 @@ pub fn main() !void {
         return error.ArError;
     }
 
-    const files_to_keep = switch (comptime @import("builtin").target.os.tag) {
-        .windows => try filterObjFilesWindows(allocator, temp_dir, remove_symbol.items),
-
-        .linux, .macos => {
-            std.log.info("target os is not supported, doing nothing", .{});
-            return;
-        },
+    const format = format_opt orelse switch (comptime @import("builtin").target.os.tag) {
+        .windows => "coff",
+        .linux => "elf",
+        .macos => "macho",
         else => {
             std.log.info("target os is not recognized, doing nothing", .{});
+            return;
+        },
+    };
+
+    var format_enum: ?Format = null;
+    inline for (std.meta.fields(Format)) |f| {
+        if (std.mem.eql(u8, format, f.name)) {
+            format_enum = @enumFromInt(f.value);
+        }
+    }
+
+    if (format_enum == null) {
+        std.debug.panic("format {s} not recognized", .{format});
+    }
+
+    const files_to_keep = switch (format_enum.?) {
+        .coff => try filterObjFilesWindows(allocator, temp_dir, remove_symbol.items),
+        .elf, .macho => {
+            std.log.info("format is not supported yet, doing nothing", .{});
             return;
         },
     };
