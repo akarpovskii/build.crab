@@ -12,18 +12,24 @@ pub fn build(b: *std.Build) void {
 
     const build_crab = @import("build.crab");
 
-    var crate_lib_path = build_crab.addRustStaticlib(b, .{
-        .name = "libcrate.a",
-        .manifest_path = b.path("rust/Cargo.toml"),
-        .cargo_args = &.{
-            "--release",
-            "--quiet",
+    var crate_lib_path = build_crab.addRustStaticlibWithUserOptions(
+        b,
+        .{
+            .name = "libcrate.a",
+            .manifest_path = b.path("rust/Cargo.toml"),
+            .cargo_args = &.{
+                "--release",
+                "--quiet",
+            },
         },
-    });
+        .{ .target = target, .optimize = optimize },
+    );
 
     lib_unit_tests.linkLibCpp();
     lib_unit_tests.addLibraryPath(crate_lib_path.dirname());
     lib_unit_tests.linkSystemLibrary("crate");
+
+    b.installArtifact(lib_unit_tests);
 
     const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
 
