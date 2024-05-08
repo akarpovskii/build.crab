@@ -1,9 +1,13 @@
 const std = @import("std");
 
 fn printUsage() !void {
-    std.log.err(
-        "Usage `build_crab --out <output path> --target-dir <directory> --manifest-path <path/to/Cargo.toml> [--zigbuild] [--deps <.d file path>] [-- <cargo build args>]`",
-        .{},
+    try std.io.getStdOut().writeAll(
+        "Usage: build_crab " ++
+            "--manifest-path <path/to/Cargo.toml> " ++
+            "--target-dir <directory> " ++
+            "--out <output path> " ++
+            "[--deps <.d file path>] " ++
+            "[--zigbuild] [-- <cargo build args>]",
     );
 }
 
@@ -11,6 +15,11 @@ const CargoMessage = struct {
     reason: []const u8,
     filenames: ?[][]const u8 = null,
     manifest_path: ?[]const u8 = null,
+    target: ?CargoTarget = null,
+};
+
+const CargoTarget = struct {
+    kind: [][]const u8,
 };
 
 pub fn main() !void {
@@ -85,7 +94,12 @@ pub fn main() !void {
     }
 
     std.log.debug("about to execute {}", .{std.json.fmt(cargo_cmd.items, .{})});
-    const cargo_result = try std.process.Child.run(.{ .allocator = allocator, .argv = cargo_cmd.items });
+    const cargo_result = try std.process.Child.run(.{
+        .allocator = allocator,
+        .argv = cargo_cmd.items,
+        // TODO: Dump output to a file
+        .max_output_bytes = 50 * 1024 * 1024,
+    });
     defer {
         allocator.free(cargo_result.stdout);
         allocator.free(cargo_result.stderr);
@@ -99,7 +113,7 @@ pub fn main() !void {
     }
 
     var lines = std.mem.tokenizeScalar(u8, cargo_result.stdout, '\n');
-    while (lines.next()) |line| {
+    outer: while (lines.next()) |line| {
         std.log.debug("parsing cargo output: {s}", .{line});
         const message = try std.json.parseFromSliceLeaky(CargoMessage, allocator, line, .{ .ignore_unknown_fields = true });
         if (!std.mem.eql(u8, message.reason, "compiler-artifact")) {
@@ -111,6 +125,13 @@ pub fn main() !void {
         if (!std.mem.eql(u8, artifact_manifest, manifest_path.?)) {
             std.log.debug("artifact's manifest-path [{s}] does not equal to package's manifest-path, ignored", .{artifact_manifest});
             continue;
+        }
+
+        for (message.target.?.kind) |kind| {
+            if (std.mem.eql(u8, kind, "custom-build")) {
+                std.log.debug("artifact is a custom build script, ignored", .{});
+                continue :outer;
+            }
         }
 
         const filenames = message.filenames orelse @panic("expected 'compiler-artifact' to contains a list of filenames");

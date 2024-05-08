@@ -24,6 +24,11 @@ module.addLibraryPath(crate_lib_path.dirname());
 module.linkSystemLibrary("crate", .{});
 ```
 
+## Target triples
+
+This package also provides [some utilities](src/rust.zig) to convert target triples between Zig and Rust.
+Currently, only tier 1 targets are somewhat tested. If you notice inconsistencies, please file a bug report.
+
 ## Windows
 
 ![Hydra meme with Windows as the weird head!](./images/windows%20is%20the%20weird%20one.jpeg)

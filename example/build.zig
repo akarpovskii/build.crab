@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
 
     const build_crab = @import("build.crab");
 
-    var crate_lib_path = build_crab.addCargoBuild(b, .{
+    var crate_lib_path = build_crab.addRustStaticlib(b, .{
         .name = "libcrate.a",
         .manifest_path = b.path("rust/Cargo.toml"),
         .cargo_args = &.{
@@ -20,16 +20,6 @@ pub fn build(b: *std.Build) void {
             "--quiet",
         },
     });
-
-    if (@import("builtin").target.os.tag == .windows) {
-        crate_lib_path = build_crab.addStripSymbols(b, .{
-            .name = "libcrate.a",
-            .archive = crate_lib_path,
-            .symbols = &.{
-                "___chkstk_ms",
-            },
-        });
-    }
 
     lib_unit_tests.linkLibCpp();
     lib_unit_tests.addLibraryPath(crate_lib_path.dirname());

@@ -30,8 +30,8 @@ jobs:
       - name: Zig version
         run: zig version
 
-      - name: Build
-        run: zig build --summary all
+      - name: Build & Test
+        run: zig build test --summary all
 
       - name: Run integration tests
         run: |

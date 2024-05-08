@@ -1,9 +1,16 @@
 const std = @import("std");
 
+pub usingnamespace @import("src/root.zig");
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-
     const optimize = b.standardOptimizeOption(.{});
+
+    _ = b.addModule("build.crab", .{
+        .root_source_file = .{ .path = "src/root.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
 
     const exe = b.addExecutable(.{
         .name = "build_crab",
@@ -44,6 +51,17 @@ pub fn build(b: *std.Build) void {
 
     const run_strip_symbols_step = b.step("strip", "Run the app");
     run_strip_symbols_step.dependOn(&run_strip_symbols.step);
+
+    const lib_unit_tests = b.addTest(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_lib_unit_tests.step);
 }
 
 const CargoConfig = struct {
@@ -62,7 +80,7 @@ const CargoConfig = struct {
     cargo_args: []const []const u8 = &.{},
 
     /// Target architecture.
-    /// If null, build.zig will use x86_64-pc-windows-gnu on Windows.
+    /// If null, build.zig will use gnu ABI on Windows.
     target: ?[]const u8 = null,
 };
 
@@ -103,8 +121,11 @@ pub fn addCargoBuildWithUserOptions(b: *std.Build, config: CargoConfig, args: an
         build_crab.addArg("--target");
         build_crab.addArg(target);
     } else if (@import("builtin").target.os.tag == .windows) {
+        var target = @import("builtin").target;
+        target.abi = .gnu;
+        const rust_target = @This().Target.fromZig(target) catch @panic("unable to convert target triple to Rust");
         build_crab.addArg("--target");
-        build_crab.addArg("x86_64-pc-windows-gnu");
+        build_crab.addArg(b.fmt("{}", .{rust_target}));
     }
 
     build_crab.addArgs(config.cargo_args);
@@ -151,4 +172,20 @@ pub fn addStripSymbolsWithUserOptions(b: *std.Build, config: StripSymbolsConfig,
     const out_file = strip_symbols.addOutputFileArg(config.name);
 
     return out_file;
+}
+
+/// A combination of `addCargoBuild` and `addStripSymbols` that strips `___chkstk_ms` on Windows.
+pub fn addRustStaticlib(b: *std.Build, config: CargoConfig) std.Build.LazyPath {
+    var crate_lib_path = addCargoBuild(b, config);
+
+    if (@import("builtin").target.os.tag == .windows) {
+        crate_lib_path = addStripSymbols(b, .{
+            .name = config.name,
+            .archive = crate_lib_path,
+            .symbols = &.{
+                "___chkstk_ms",
+            },
+        });
+    }
+    return crate_lib_path;
 }
