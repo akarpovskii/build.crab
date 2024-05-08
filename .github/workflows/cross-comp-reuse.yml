@@ -1,0 +1,64 @@
+name: Cross compilation
+
+on:
+  workflow_call:
+    inputs:
+      host:
+        required: true
+        type: string
+      target:
+        required: true
+        type: string
+      target-rust:
+        required: true
+        type: string
+      target-runner:
+        required: true
+        type: string
+
+jobs:
+  build:
+    runs-on: ${{ inputs.host }}
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: goto-bus-stop/setup-zig@2a9625d550eefc3a9b1a43d342ad655f563f8241
+        with:
+          version: 0.12.0
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+            targets: ${{ inputs.target-rust }}
+
+      - name: Zig version
+        run: zig version
+
+      - name: Build example
+        run: |
+          cd example
+          zig build -Dtarget=${{ inputs.target }} --summary all
+
+      - name: Tar pack
+        run: tar -cvf artifacts.tar -C example zig-out
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: artifacts-${{ inputs.host }}-${{ inputs.target }}
+          path: artifacts.tar
+
+  test:
+    needs: [build]
+    runs-on: ${{ inputs.target-runner }}
+    steps:
+      - name: Download artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: artifacts-${{ inputs.host }}-${{ inputs.target }}
+
+      - name: Tar unpack
+        run: tar -xvf artifacts.tar
+
+      - name: Run example
+        run: |
+          chmod +x zig-out/bin/test
+          zig-out/bin/test
