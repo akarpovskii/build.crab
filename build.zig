@@ -123,8 +123,9 @@ pub fn addCargoBuildWithUserOptions(b: *std.Build, config: CargoConfig, args: an
     } else if (@import("builtin").target.os.tag == .windows) {
         var target = @import("builtin").target;
         target.abi = .gnu;
+        const rust_target = @This().Target.fromZig(target) catch @panic("unable to convert target triple to Rust");
         build_crab.addArg("--target");
-        build_crab.addArg(@This().Target.fromZig(target) catch @panic("unable to convert target triple to Rust"));
+        build_crab.addArg(b.fmt("{}", .{rust_target}));
     }
 
     build_crab.addArgs(config.cargo_args);
