@@ -124,7 +124,7 @@ pub fn addCargoBuildWithUserOptions(b: *std.Build, config: CargoConfig, args: an
         var target = @import("builtin").target;
         target.abi = .gnu;
         build_crab.addArg("--target");
-        build_crab.addArg(@This().Target.fromZig(target));
+        build_crab.addArg(@This().Target.fromZig(target) catch @panic("unable to convert target triple to Rust"));
     }
 
     build_crab.addArgs(config.cargo_args);
