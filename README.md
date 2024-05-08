@@ -5,7 +5,7 @@ Thin wrapper around Cargo which integrates it with Zig's build system.
 ## Usage
 
 ```sh
-zig fetch --save https://github.com/akarpovskii/build.crab/archive/refs/tags/v0.1.2.tar.gz
+zig fetch --save https://github.com/akarpovskii/build.crab/archive/refs/tags/v0.1.3.tar.gz
 ```
 
 In `build.zig` (replace `crate` with the name of your crate):
