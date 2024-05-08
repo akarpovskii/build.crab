@@ -174,18 +174,23 @@ pub fn addStripSymbolsWithUserOptions(b: *std.Build, config: StripSymbolsConfig,
     return out_file;
 }
 
-/// A combination of `addCargoBuild` and `addStripSymbols` that strips `___chkstk_ms` on Windows.
+/// See `addRustStaticlibWithUserOptions` if you need to pass options to `b.dependency()`
 pub fn addRustStaticlib(b: *std.Build, config: CargoConfig) std.Build.LazyPath {
-    var crate_lib_path = addCargoBuild(b, config);
+    return addRustStaticlibWithUserOptions(b, config, .{});
+}
+
+/// A combination of `addCargoBuild` and `addStripSymbols` that strips `___chkstk_ms` on Windows.
+pub fn addRustStaticlibWithUserOptions(b: *std.Build, config: CargoConfig, args: anytype) std.Build.LazyPath {
+    var crate_lib_path = addCargoBuildWithUserOptions(b, config, args);
 
     if (@import("builtin").target.os.tag == .windows) {
-        crate_lib_path = addStripSymbols(b, .{
+        crate_lib_path = addStripSymbolsWithUserOptions(b, .{
             .name = config.name,
             .archive = crate_lib_path,
             .symbols = &.{
                 "___chkstk_ms",
             },
-        });
+        }, args);
     }
     return crate_lib_path;
 }
