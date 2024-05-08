@@ -1,9 +1,16 @@
 const std = @import("std");
 
+pub usingnamespace @import("src/root.zig");
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
-
     const optimize = b.standardOptimizeOption(.{});
+
+    _ = b.addModule("build.crab", .{
+        .root_source_file = .{ .path = "src/root.zig" },
+        .target = target,
+        .optimize = optimize,
+    });
 
     const exe = b.addExecutable(.{
         .name = "build_crab",
@@ -44,6 +51,17 @@ pub fn build(b: *std.Build) void {
 
     const run_strip_symbols_step = b.step("strip", "Run the app");
     run_strip_symbols_step.dependOn(&run_strip_symbols.step);
+
+    const lib_unit_tests = b.addTest(.{
+        .root_source_file = b.path("src/root.zig"),
+        .target = target,
+        .optimize = optimize,
+    });
+
+    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
+
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_lib_unit_tests.step);
 }
 
 const CargoConfig = struct {
