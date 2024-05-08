@@ -80,7 +80,7 @@ const CargoConfig = struct {
     cargo_args: []const []const u8 = &.{},
 
     /// Target architecture.
-    /// If null, build.zig will use x86_64-pc-windows-gnu on Windows.
+    /// If null, build.zig will use gnu ABI on Windows.
     target: ?[]const u8 = null,
 };
 
@@ -121,8 +121,10 @@ pub fn addCargoBuildWithUserOptions(b: *std.Build, config: CargoConfig, args: an
         build_crab.addArg("--target");
         build_crab.addArg(target);
     } else if (@import("builtin").target.os.tag == .windows) {
+        var target = @import("builtin").target;
+        target.abi = .gnu;
         build_crab.addArg("--target");
-        build_crab.addArg("x86_64-pc-windows-gnu");
+        build_crab.addArg(@This().Target.fromZig(target));
     }
 
     build_crab.addArgs(config.cargo_args);
