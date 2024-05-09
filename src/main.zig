@@ -7,7 +7,7 @@ fn printUsage() !void {
             "--target-dir <directory> " ++
             "--out <output path> " ++
             "[--deps <.d file path>] " ++
-            "[--zigbuild] [-- <cargo build args>]",
+            "[--zigbuild] [-- <cargo build args>]\n",
     );
 }
 

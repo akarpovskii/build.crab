@@ -1,6 +1,7 @@
 # build.crab
 
-Thin wrapper around Cargo which integrates it with Zig's build system.
+Thin wrapper around Cargo which integrates it with Zig's build system. <br>
+Cross-compilation is supported.
 
 ## Usage
 
@@ -24,10 +25,25 @@ module.addLibraryPath(crate_lib_path.dirname());
 module.linkSystemLibrary("crate", .{});
 ```
 
-## Target triples
+## Cross-compilation
 
-This package also provides [some utilities](src/rust.zig) to convert target triples between Zig and Rust.
-Currently, only tier 1 targets are somewhat tested. If you notice inconsistencies, please file a bug report.
+To specify the compilation target, pass it to the functions accepting user options:
+
+```zig
+const target = b.standardTargetOptions(.{});
+const crate_lib_path = @import("build.crab").addCargoBuildWithUserOptions(b,
+  .{
+    // Cargo params
+  },
+  .{
+    .target = target,
+  }
+);
+```
+
+`build.crab` will try its best to convert Zig's target triple to Rust and call `cargo build` with the appropriate `--target` argument.
+
+See [`rust.zig`](src/rust.zig) and the tests at the bottom to know how the conversion is done.
 
 ## Windows
 
@@ -37,8 +53,9 @@ Windows, as always, is the weird one.
 
 By default, Rust on Windows targets MSVC toolchain. This creates additional problems as you have to link against msvcrt, etc.
 
-If you want to avoid that, you should target windows-gnu (see the [`example`](./example/build.zig)).
-But that has its own problems as both Rust and Zig provide `compiler_rt.lib`. Most of the symbols in `compiler_rt` has weak linking, but not `___chkstk` and `___chkstk_ms`.
+If you want to avoid that, you should target windows-gnu (see the [`example`](./example/build.zig)). This is the default behavior of `build.crab`.
+
+But that has its own problems since both Rust and Zig provide `compiler_rt.lib` with most of the symbols having weak linking, but not `___chkstk` and `___chkstk_ms`.
 
 So if you want to link against a Rust library that needs these intrinsics, you should somehow resolve the conflict (though I'm not completely sure that it is safe to do).
 
@@ -57,8 +74,7 @@ module.addLibraryPath(crate_lib_path.dirname());
 module.linkSystemLibrary("crate", .{});
 ```
 
-See the [`buid.zig`](./example/build.zig) for a complete example.
-
+If you use `addRustStaticlib` or `addRustStaticlibWithUserOptions`, this is already taken care of for you. See the [`buid.zig`](./example/build.zig) for a complete example.
 
 On top of that, I recommend adding the following parameters to `Cargo.toml`:
 
@@ -69,6 +85,6 @@ strip = true
 lto = true
 ```
 
-Otherwise, you again will have to link some obscure Windows libraries even if you don't need them.
+Otherwise, you again will have to link some obscure Windows libraries even if you don't use them.
 
 And it also makes the size of the rust library smaller. Zig 0.12.0 has some problems consuming large archives on macOS (fixed in [#19758](https://github.com/ziglang/zig/issues/19718)) making it a good default choice.

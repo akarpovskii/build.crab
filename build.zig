@@ -93,7 +93,8 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig) std.Build.LazyPath {
 /// The crate must produce only one artifact (meaning shared libraries are not yet supported).
 /// If you need more flexibility, `build_crab` artifact can be used directly.
 pub fn addCargoBuildWithUserOptions(b: *std.Build, config: CargoConfig, args: anytype) std.Build.LazyPath {
-    const @"build.crab" = b.dependency("build.crab", args);
+    const dep_args = overrideTargetUserInput(args);
+    const @"build.crab" = b.dependency("build.crab", dep_args);
     const build_crab = b.addRunArtifact(@"build.crab".artifact("build_crab"));
 
     if (config.zigbuild) {
@@ -117,12 +118,16 @@ pub fn addCargoBuildWithUserOptions(b: *std.Build, config: CargoConfig, args: an
 
     build_crab.addArg("--");
 
+    const zig_target = targetFromUserInputOptions(args);
+
     if (config.target) |target| {
         build_crab.addArg("--target");
         build_crab.addArg(target);
-    } else if (@import("builtin").target.os.tag == .windows) {
-        var target = @import("builtin").target;
-        target.abi = .gnu;
+    } else {
+        var target = zig_target;
+        if (zig_target.os.tag == .windows) {
+            target.abi = .gnu;
+        }
         const rust_target = @This().Target.fromZig(target) catch @panic("unable to convert target triple to Rust");
         build_crab.addArg("--target");
         build_crab.addArg(b.fmt("{}", .{rust_target}));
@@ -153,7 +158,8 @@ pub fn addStripSymbols(b: *std.Build, config: StripSymbolsConfig) std.Build.Lazy
 /// Only Windows is supported, does nothing on other systems.
 /// If you need more flexibility, `strip_symbols` artifact can be used directly.
 pub fn addStripSymbolsWithUserOptions(b: *std.Build, config: StripSymbolsConfig, args: anytype) std.Build.LazyPath {
-    const @"build.crab" = b.dependency("build.crab", args);
+    const dep_args = overrideTargetUserInput(args);
+    const @"build.crab" = b.dependency("build.crab", dep_args);
     const strip_symbols = b.addRunArtifact(@"build.crab".artifact("strip_symbols"));
 
     strip_symbols.addArg("--archive");
@@ -171,6 +177,10 @@ pub fn addStripSymbolsWithUserOptions(b: *std.Build, config: StripSymbolsConfig,
     strip_symbols.addArg("--output");
     const out_file = strip_symbols.addOutputFileArg(config.name);
 
+    const zig_target = targetFromUserInputOptions(args);
+    strip_symbols.addArg("--os");
+    strip_symbols.addArg(@tagName(zig_target.os.tag));
+
     return out_file;
 }
 
@@ -183,7 +193,8 @@ pub fn addRustStaticlib(b: *std.Build, config: CargoConfig) std.Build.LazyPath {
 pub fn addRustStaticlibWithUserOptions(b: *std.Build, config: CargoConfig, args: anytype) std.Build.LazyPath {
     var crate_lib_path = addCargoBuildWithUserOptions(b, config, args);
 
-    if (@import("builtin").target.os.tag == .windows) {
+    const zig_target = targetFromUserInputOptions(args);
+    if (zig_target.os.tag == .windows) {
         crate_lib_path = addStripSymbolsWithUserOptions(b, .{
             .name = config.name,
             .archive = crate_lib_path,
@@ -193,4 +204,42 @@ pub fn addRustStaticlibWithUserOptions(b: *std.Build, config: CargoConfig, args:
         }, args);
     }
     return crate_lib_path;
+}
+
+fn targetFromUserInputOptions(args: anytype) std.Target {
+    inline for (@typeInfo(@TypeOf(args)).Struct.fields) |field| {
+        const v = @field(args, field.name);
+        const T = @TypeOf(v);
+        switch (T) {
+            std.Target.Query => return std.zig.system.resolveTargetQuery(v) catch
+                @panic("failed to resolve target query"),
+            std.Build.ResolvedTarget => return v.result,
+            else => {},
+        }
+    }
+
+    return @import("builtin").target;
+}
+
+fn overrideTargetUserInput(args: anytype) @TypeOf(args) {
+    var new_args = args;
+    const host_target = @import("builtin").target;
+    inline for (@typeInfo(@TypeOf(new_args)).Struct.fields) |field| {
+        const v = &@field(new_args, field.name);
+        const T = field.type;
+        switch (T) {
+            std.Target.Query => {
+                v.* = std.Target.Query.fromTarget(host_target);
+            },
+            std.Build.ResolvedTarget => {
+                v.* = .{
+                    .query = std.Target.Query.fromTarget(host_target),
+                    .result = host_target,
+                };
+            },
+            else => {},
+        }
+    }
+
+    return new_args;
 }
