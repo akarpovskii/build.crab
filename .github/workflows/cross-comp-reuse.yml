@@ -29,13 +29,25 @@ jobs:
         with:
             targets: ${{ inputs.target-rust }}
 
+      - name: Install linker for windows target - linux
+        if: ${{ inputs.target == 'x86_64-windows-gnu' && contains(inputs.host, 'ubuntu') }}
+        run: sudo apt-get install mingw-w64
+
+      - name: Install linker for windows target - macos
+        if: ${{ inputs.target == 'x86_64-windows-gnu' && contains(inputs.host, 'macos') }}
+        run: brew install mingw-w64
+
+      - name: Install cargo zigbuild
+        if: ${{ inputs.target == 'aarch64-macos' }}
+        run: cargo install cargo-zigbuild
+
       - name: Zig version
         run: zig version
 
       - name: Build example
         run: |
           cd example
-          zig build -Dtarget=${{ inputs.target }} --summary all
+          zig build -Dtarget=${{ inputs.target }} -Dzigbuild=${{ inputs.target == 'aarch64-macos' }} -j1 --summary all
 
       - name: Tar pack
         run: tar -cvf artifacts.tar -C example zig-out
@@ -58,7 +70,28 @@ jobs:
       - name: Tar unpack
         run: tar -xvf artifacts.tar
 
-      - name: Run example
+      - name: Run all tests - windows
+        if: ${{ contains(inputs.target-runner, 'windows') }}
         run: |
-          chmod +x zig-out/bin/test
-          zig-out/bin/test
+          chmod +x zig-out/bin/test-*
+          $files = Get-ChildItem -Path "zig-out/bin" -File -Filter "test-*.exe"
+          foreach ($file in $files) {
+            echo "Running $test_file"
+            $exitCode = & $file.FullName
+            if ($exitCode -ne 0) {
+              exit $exitCode
+            }
+          }
+
+      - name: Run all tests - linux, macOS
+        if: ${{ !contains(inputs.target-runner, 'windows') }}
+        run: |
+          chmod +x zig-out/bin/test-*
+          for test_file in zig-out/bin/test-*; do
+            echo "Running $test_file"
+            "./$test_file"
+            result=$?
+            if [ $result -ne 0 ]; then
+              exit $result
+            fi
+          done

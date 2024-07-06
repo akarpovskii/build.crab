@@ -11,6 +11,6 @@ strip = true
 lto = true
 
 [lib]
-crate-type = ["lib", "cdylib", "staticlib"]
+crate-type = ["cdylib", "staticlib"]
 
 [dependencies]

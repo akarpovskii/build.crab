@@ -8,10 +8,12 @@ pub fn build(b: *std.Build) void {
 
     const folders: []const []const u8 = &.{
         "staticlib",
-        "lib_cdylib_staticlib",
+        "cdylib_staticlib",
     };
 
     const test_step = b.step("test", "Run unit tests");
+
+    const zigbuild = b.option(bool, "zigbuild", "Use cargo zigbuild") orelse false;
 
     for (folders) |folder| {
         var crate_lib_path = build_crab.addRustStaticlib(
@@ -19,6 +21,7 @@ pub fn build(b: *std.Build) void {
             .{
                 .name = "libcrate.a",
                 .manifest_path = b.path(b.fmt("{s}/Cargo.toml", .{folder})),
+                .command = if (zigbuild) "zigbuild" else "build",
                 .cargo_args = &.{
                     "--release",
                     "--quiet",
