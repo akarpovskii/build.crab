@@ -3,6 +3,10 @@
 Thin wrapper around Cargo which integrates it with Zig's build system. <br>
 Cross-compilation is supported.
 
+## Requirements
+
+* Zig >= 0.13.0
+
 ## Usage
 
 ```sh

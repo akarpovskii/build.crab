@@ -5,9 +5,9 @@ fn printUsage() !void {
         "Usage: build_crab " ++
             "--manifest-path <path/to/Cargo.toml> " ++
             "--target-dir <directory> " ++
-            "--out <output path> " ++
             "[--deps <.d file path>] " ++
-            "[--zigbuild] [-- <cargo build args>]\n",
+            "[--command <build (default) / rustc / zigbuild etc>] " ++
+            "[-- <cargo <command> args>]\n",
     );
 }
 
@@ -28,9 +28,8 @@ pub fn main() !void {
     const allocator = arena.allocator();
 
     var args = try std.process.argsWithAllocator(allocator);
-    var zigbuild: bool = false;
+    var command: ?[]const u8 = null;
     var deps_file: ?[]const u8 = null;
-    var out_file: ?[]const u8 = null;
     var target_dir: ?[]const u8 = null;
     var manifest_path: ?[]const u8 = null;
     var cargo_args = std.ArrayList([]const u8).init(allocator);
@@ -38,11 +37,8 @@ pub fn main() !void {
 
     _ = args.next();
     while (args.next()) |arg| {
-        if (std.mem.eql(u8, arg, "--zigbuild")) {
-            zigbuild = true;
-        }
-        if (std.mem.eql(u8, arg, "--out")) {
-            out_file = args.next() orelse break;
+        if (std.mem.eql(u8, arg, "--command")) {
+            command = args.next() orelse break;
         }
         if (std.mem.eql(u8, arg, "--target-dir")) {
             target_dir = args.next() orelse break;
@@ -62,13 +58,12 @@ pub fn main() !void {
     }
 
     std.log.debug("Received:", .{});
-    std.log.debug("out = {?s}", .{out_file});
     std.log.debug("target-dir = {?s}", .{target_dir});
     std.log.debug("manifest-path = {?s}", .{manifest_path});
     std.log.debug("deps = {?s}", .{deps_file});
     std.log.debug("cargo args = {}", .{std.json.fmt(cargo_args.items, .{})});
 
-    if (out_file == null or target_dir == null or manifest_path == null) {
+    if (target_dir == null or manifest_path == null) {
         try printUsage();
         return;
     }
@@ -76,11 +71,7 @@ pub fn main() !void {
     var cargo_cmd = std.ArrayList([]const u8).init(allocator);
     defer cargo_cmd.deinit();
     try cargo_cmd.append("cargo");
-    if (zigbuild) {
-        try cargo_cmd.append("zigbuild");
-    } else {
-        try cargo_cmd.append("build");
-    }
+    try cargo_cmd.append(command orelse "build");
     try cargo_cmd.append("--message-format=json-render-diagnostics");
     try cargo_cmd.append("--target-dir");
     try cargo_cmd.append(target_dir.?);
@@ -136,20 +127,20 @@ pub fn main() !void {
 
         const filenames = message.filenames orelse @panic("expected 'compiler-artifact' to contains a list of filenames");
 
-        if (filenames.len != 1) {
-            @panic(try std.fmt.allocPrint(
-                allocator,
-                "expected only one artifact, got {any}",
-                .{std.json.fmt(filenames, .{})},
-            ));
+        if (filenames.len == 0) {
+            @panic(try std.fmt.allocPrint(allocator, "no filenames provided by Cargo", .{}));
         }
 
-        const artifact = filenames[0];
         const cwd = std.fs.cwd();
-        std.log.debug("About to copy '{s}' '{s}'", .{ artifact, out_file.? });
-        try std.fs.Dir.copyFile(cwd, artifact, cwd, out_file.?, .{});
+        const dst_dir = try cwd.openDir(target_dir.?, .{});
+        for (filenames) |artifact| {
+            const basename = std.fs.path.basename(artifact);
+            std.log.debug("About to copy '{s}' to '{s}/{s}'", .{ artifact, target_dir.?, basename });
+            try std.fs.Dir.copyFile(cwd, artifact, dst_dir, basename, .{});
+        }
 
         if (deps_file) |path| {
+            const artifact = filenames[0];
             const dot = std.mem.lastIndexOfScalar(u8, artifact, '.');
             const basename = if (dot) |until_extension|
                 artifact[0..until_extension]
@@ -158,7 +149,7 @@ pub fn main() !void {
 
             const artifact_d = try std.mem.concat(allocator, u8, &.{ basename, ".d" });
             defer allocator.free(artifact_d);
-            std.log.debug("About to copy '{s}' '{s}'", .{ artifact_d, path });
+            std.log.debug("About to copy '{s}' to '{s}'", .{ artifact_d, path });
             try std.fs.Dir.copyFile(cwd, artifact_d, cwd, path, .{});
         }
 

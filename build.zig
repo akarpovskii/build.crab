@@ -73,8 +73,8 @@ const CargoConfig = struct {
     /// Path to Cargo.toml
     manifest_path: std.Build.LazyPath,
 
-    /// If true, build.crab will use `cargo zigbuild` instead.
-    zigbuild: bool = false,
+    /// `build`, `rustc`, `zigbuild`, etc.
+    command: []const u8 = "build",
 
     /// Additional arguments to be forwarded to Cargo
     cargo_args: []const []const u8 = &.{},
@@ -85,7 +85,7 @@ const CargoConfig = struct {
 };
 
 /// Adds all the steps and dependencies required to build a Rust crate.
-/// The crate must produce only one artifact (meaning shared libraries are not yet supported).
+/// Returns a directory with all the artifacts produced by the crate.
 /// If you need more flexibility, `build_crab` artifact can be used directly.
 /// The `args` parameter is passed to `b.dependency`.
 /// Use `args.target` to specify the target for cross-compilation.
@@ -95,9 +95,8 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Buil
     const @"build.crab" = b.dependency("build.crab", dep_args);
     const build_crab = b.addRunArtifact(@"build.crab".artifact("build_crab"));
 
-    if (config.zigbuild) {
-        build_crab.addArg("--zigbuild");
-    }
+    build_crab.addArg("--command");
+    build_crab.addArg(config.command);
 
     const dep_filename = std.mem.concat(b.allocator, u8, &.{ std.fs.path.stem(config.name), ".d" }) catch @panic("OOM");
     build_crab.addArg("--deps");
@@ -106,13 +105,8 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Buil
     build_crab.addArg("--manifest-path");
     _ = build_crab.addFileArg(config.manifest_path);
 
-    const cargo_target = b.addWriteFiles();
-    const target_dir = cargo_target.getDirectory();
     build_crab.addArg("--target-dir");
-    build_crab.addDirectoryArg(target_dir);
-
-    build_crab.addArg("--out");
-    const lib_path = build_crab.addOutputFileArg(config.name);
+    const target_dir = build_crab.addOutputDirectoryArg("build_crab_out");
 
     build_crab.addArg("--");
 
@@ -133,7 +127,7 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Buil
 
     build_crab.addArgs(config.cargo_args);
 
-    return lib_path;
+    return target_dir;
 }
 
 const StripSymbolsConfig = struct {
@@ -181,11 +175,13 @@ pub fn addStripSymbols(b: *std.Build, config: StripSymbolsConfig, args: anytype)
 }
 
 /// A combination of `addCargoBuild` and `addStripSymbols` that strips `___chkstk_ms` on Windows.
+/// Returns a path to the generated library file.
 /// The `args` parameter is passed to `b.dependency`.
 /// Use `args.target` to specify the target for cross-compilation.
 /// Use `args.optimize` to set the optimization level of `build.crab` binaries.
 pub fn addRustStaticlib(b: *std.Build, config: CargoConfig, args: anytype) std.Build.LazyPath {
-    var crate_lib_path = addCargoBuild(b, config, args);
+    const crate_output = addCargoBuild(b, config, args);
+    var crate_lib_path = crate_output.path(b, config.name);
 
     const zig_target = targetFromUserInputOptions(args);
     if (zig_target.os.tag == .windows) {
