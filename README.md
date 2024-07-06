@@ -11,15 +11,24 @@ zig fetch --save https://github.com/akarpovskii/build.crab/archive/refs/tags/v0.
 
 In `build.zig` (replace `crate` with the name of your crate):
 ```zig
-const crate_lib_path = @import("build.crab").addCargoBuild(b, .{
-    .name = "libcrate.a",
-    .manifest_path = b.path("path/to/Cargo.toml"),
-    // You can pass additional arguments to Cargo
-    .cargo_args = &.{
-        "--release",
-        "--quiet",
+const build_crab = @import("build.crab");
+const crate_lib_path = build_crab.addCargoBuild(
+    b,
+    .{
+        .name = "libcrate.a",
+        .manifest_path = b.path("path/to/Cargo.toml"),
+        // You can pass additional arguments to Cargo
+        .cargo_args = &.{
+            "--release",
+            "--quiet",
+        },
     },
-});
+    .{
+        // Set to .Debug to see debug logs,
+        // defaults to the same optimization level as your package.
+        .optimize = .ReleaseSafe,
+    },
+);
 
 module.addLibraryPath(crate_lib_path.dirname());
 module.linkSystemLibrary("crate", .{});
@@ -27,21 +36,23 @@ module.linkSystemLibrary("crate", .{});
 
 ## Cross-compilation
 
-To specify the compilation target, pass it to the functions accepting user options:
+Use `target` argument to specify the cross-compilation target:
 
 ```zig
 const target = b.standardTargetOptions(.{});
-const crate_lib_path = @import("build.crab").addCargoBuildWithUserOptions(b,
-  .{
-    // Cargo params
-  },
-  .{
-    .target = target,
-  }
+const build_crab = @import("build.crab");
+const crate_lib_path = build_crab.addCargoBuild(
+    b,
+    .{
+        // Cargo params
+    },
+    .{
+        .target = target,
+    },
 );
 ```
 
-`build.crab` will try its best to convert Zig's target triple to Rust and call `cargo build` with the appropriate `--target` argument.
+`build.crab` binaries will still be built for the native target, but it will try its best to convert Zig's target triple to Rust and call `cargo build` with the appropriate `--target` argument.
 
 See [`rust.zig`](src/rust.zig) and the tests at the bottom to know how the conversion is done.
 

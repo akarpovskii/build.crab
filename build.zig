@@ -84,15 +84,13 @@ const CargoConfig = struct {
     target: ?[]const u8 = null,
 };
 
-/// See `addCargoBuildWithUserOptions` if you need to pass options to `b.dependency()`
-pub fn addCargoBuild(b: *std.Build, config: CargoConfig) std.Build.LazyPath {
-    return addCargoBuildWithUserOptions(b, config, .{});
-}
-
 /// Adds all the steps and dependencies required to build a Rust crate.
 /// The crate must produce only one artifact (meaning shared libraries are not yet supported).
 /// If you need more flexibility, `build_crab` artifact can be used directly.
-pub fn addCargoBuildWithUserOptions(b: *std.Build, config: CargoConfig, args: anytype) std.Build.LazyPath {
+/// The `args` parameter is passed to `b.dependency`.
+/// Use `args.target` to specify the target for cross-compilation.
+/// Use `args.optimize` to set the optimization level of `build.crab` binaries.
+pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Build.LazyPath {
     const dep_args = overrideTargetUserInput(args);
     const @"build.crab" = b.dependency("build.crab", dep_args);
     const build_crab = b.addRunArtifact(@"build.crab".artifact("build_crab"));
@@ -149,15 +147,13 @@ const StripSymbolsConfig = struct {
     symbols: []const []const u8,
 };
 
-/// See `addStripSymbolsWithUserOptions` if you need to pass options to `b.dependency()`
-pub fn addStripSymbols(b: *std.Build, config: StripSymbolsConfig) std.Build.LazyPath {
-    return addStripSymbolsWithUserOptions(b, config, .{});
-}
-
 /// Re-packs a static library removing object files containing `config.symbols`.
 /// Only Windows is supported, does nothing on other systems.
 /// If you need more flexibility, `strip_symbols` artifact can be used directly.
-pub fn addStripSymbolsWithUserOptions(b: *std.Build, config: StripSymbolsConfig, args: anytype) std.Build.LazyPath {
+/// The `args` parameter is passed to `b.dependency`.
+/// Use `args.target` to specify the target for cross-compilation.
+/// Use `args.optimize` to set the optimization level of `build.crab` binaries.
+pub fn addStripSymbols(b: *std.Build, config: StripSymbolsConfig, args: anytype) std.Build.LazyPath {
     const dep_args = overrideTargetUserInput(args);
     const @"build.crab" = b.dependency("build.crab", dep_args);
     const strip_symbols = b.addRunArtifact(@"build.crab".artifact("strip_symbols"));
@@ -184,18 +180,16 @@ pub fn addStripSymbolsWithUserOptions(b: *std.Build, config: StripSymbolsConfig,
     return out_file;
 }
 
-/// See `addRustStaticlibWithUserOptions` if you need to pass options to `b.dependency()`
-pub fn addRustStaticlib(b: *std.Build, config: CargoConfig) std.Build.LazyPath {
-    return addRustStaticlibWithUserOptions(b, config, .{});
-}
-
 /// A combination of `addCargoBuild` and `addStripSymbols` that strips `___chkstk_ms` on Windows.
-pub fn addRustStaticlibWithUserOptions(b: *std.Build, config: CargoConfig, args: anytype) std.Build.LazyPath {
-    var crate_lib_path = addCargoBuildWithUserOptions(b, config, args);
+/// The `args` parameter is passed to `b.dependency`.
+/// Use `args.target` to specify the target for cross-compilation.
+/// Use `args.optimize` to set the optimization level of `build.crab` binaries.
+pub fn addRustStaticlib(b: *std.Build, config: CargoConfig, args: anytype) std.Build.LazyPath {
+    var crate_lib_path = addCargoBuild(b, config, args);
 
     const zig_target = targetFromUserInputOptions(args);
     if (zig_target.os.tag == .windows) {
-        crate_lib_path = addStripSymbolsWithUserOptions(b, .{
+        crate_lib_path = addStripSymbols(b, .{
             .name = config.name,
             .archive = crate_lib_path,
             .symbols = &.{

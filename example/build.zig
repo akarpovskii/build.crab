@@ -12,7 +12,7 @@ pub fn build(b: *std.Build) void {
 
     const build_crab = @import("build.crab");
 
-    var crate_lib_path = build_crab.addRustStaticlibWithUserOptions(
+    var crate_lib_path = build_crab.addRustStaticlib(
         b,
         .{
             .name = "libcrate.a",
@@ -22,7 +22,10 @@ pub fn build(b: *std.Build) void {
                 "--quiet",
             },
         },
-        .{ .target = target, .optimize = optimize },
+        .{
+            .target = target,
+            .optimize = optimize,
+        },
     );
 
     lib_unit_tests.linkLibCpp();
