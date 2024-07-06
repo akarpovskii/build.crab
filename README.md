@@ -102,4 +102,4 @@ lto = true
 
 Otherwise, you again will have to link some obscure Windows libraries even if you don't use them.
 
-And it also makes the size of the rust library smaller. Zig 0.12.0 has some problems consuming large archives on macOS (fixed in [#19758](https://github.com/ziglang/zig/issues/19718)) making it a good default choice.
+And it also makes the size of the rust library smaller.
