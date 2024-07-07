@@ -16,10 +16,9 @@ zig fetch --save https://github.com/akarpovskii/build.crab/archive/refs/tags/v0.
 In `build.zig` (replace `crate` with the name of your crate):
 ```zig
 const build_crab = @import("build.crab");
-const crate_lib_path = build_crab.addCargoBuild(
+const crate_artifacts = build_crab.addCargoBuild(
     b,
     .{
-        .name = "libcrate.a",
         .manifest_path = b.path("path/to/Cargo.toml"),
         // You can pass additional arguments to Cargo
         .cargo_args = &.{
@@ -34,9 +33,11 @@ const crate_lib_path = build_crab.addCargoBuild(
     },
 );
 
-module.addLibraryPath(crate_lib_path.dirname());
+module.addLibraryPath(crate_artifacts);
 module.linkSystemLibrary("crate", .{});
 ```
+
+See [`example`](./example/build.zig) for the other examples.
 
 ## Cross-compilation
 
@@ -45,7 +46,7 @@ Use `target` argument to specify the cross-compilation target:
 ```zig
 const target = b.standardTargetOptions(.{});
 const build_crab = @import("build.crab");
-const crate_lib_path = build_crab.addCargoBuild(
+const crate_artifacts = build_crab.addCargoBuild(
     b,
     .{
         // Cargo params
@@ -68,7 +69,7 @@ Windows, as always, is the weird one.
 
 By default, Rust on Windows targets MSVC toolchain. This creates additional problems as you have to link against msvcrt, etc.
 
-If you want to avoid that, you should target windows-gnu (see the [`example`](./example/build.zig)). This is the default behavior of `build.crab`.
+If you want to avoid that, you can target windows-gnu. This is the default behavior of `build.crab`.
 
 But that has its own problems since both Rust and Zig provide `compiler_rt.lib` with most of the symbols having weak linking, but not `___chkstk` and `___chkstk_ms`.
 
@@ -89,7 +90,7 @@ module.addLibraryPath(crate_lib_path.dirname());
 module.linkSystemLibrary("crate", .{});
 ```
 
-If you use `addRustStaticlib` or `addRustStaticlibWithUserOptions`, this is already taken care of for you. See the [`buid.zig`](./example/build.zig) for a complete example.
+If you use `addRustStaticlib`, this is already taken care of for you. See the [`buid.zig`](./example/build.zig) for a complete example.
 
 On top of that, I recommend adding the following parameters to `Cargo.toml`:
 
