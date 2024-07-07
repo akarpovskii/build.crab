@@ -141,18 +141,29 @@ pub fn main() !void {
 
         if (deps_file) |path| {
             const artifact = filenames[0];
-            const dot = std.mem.lastIndexOfScalar(u8, artifact, '.');
-            const basename = if (dot) |until_extension|
-                artifact[0..until_extension]
-            else
-                artifact;
+            const dirname = std.fs.path.dirname(artifact) orelse @panic("dirname cannot be null");
+            const stem = std.fs.path.stem(artifact);
 
-            const artifact_d = try std.mem.concat(allocator, u8, &.{ basename, ".d" });
+            const without_extension = std.fs.path.join(allocator, &.{ dirname, stem }) catch @panic("OOM");
+            defer allocator.free(without_extension);
+            const artifact_d = try std.mem.concat(allocator, u8, &.{ without_extension, ".d" });
             defer allocator.free(artifact_d);
-            std.log.debug("About to copy '{s}' to '{s}'", .{ artifact_d, path });
-            try std.fs.Dir.copyFile(cwd, artifact_d, cwd, path, .{});
-        }
 
-        break;
+            std.log.debug("About to copy '{s}' to '{s}'", .{ artifact_d, path });
+
+            const src = try cwd.openFile(artifact_d, .{ .mode = .read_only });
+            defer src.close();
+
+            const dst = cwd.openFile(path, .{ .mode = .read_write }) catch |e| switch (e) {
+                error.FileNotFound => try cwd.createFile(path, .{}),
+                else => return e,
+            };
+            defer dst.close();
+
+            const stat = try dst.stat();
+            try dst.seekTo(stat.size);
+            // Should we add a new line?
+            try dst.writeFileAll(src, .{});
+        }
     }
 }
