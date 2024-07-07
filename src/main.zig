@@ -155,7 +155,7 @@ pub fn main() !void {
             defer src.close();
 
             const dst = cwd.openFile(path, .{ .mode = .read_write }) catch |e| switch (e) {
-                error.FileNotFound => try cwd.createFile(path, .{}),
+                error.FileNotFound => try cwd.createFile(path, .{ .read = true }),
                 else => return e,
             };
             defer dst.close();
