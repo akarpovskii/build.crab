@@ -7,11 +7,11 @@ pub const Target = struct {
     env: Env,
 
     pub fn fromZig(target: std.Target) error{Unsupported}!Target {
-        return Target{
-            .arch = try Arch.fromZig(target.cpu.arch),
+        return .{
+            .arch = try Arch.fromZig(target),
             .vendor = try Vendor.fromZig(target),
             .os = try Os.fromZig(target.os),
-            .env = try Env.fromZig(target.abi),
+            .env = try Env.fromZig(target),
         };
     }
 
@@ -34,6 +34,8 @@ pub const Target = struct {
             try writer.print("{s}-{s}", .{ @tagName(self.arch), @tagName(self.os) });
         } else if (self.env == .none) {
             try writer.print("{s}-{s}-{s}", .{ @tagName(self.arch), @tagName(self.vendor), @tagName(self.os) });
+        } else if (self.vendor == .unknown and (self.env == .android or self.env == .androideabi)) {
+            try writer.print("{s}-{s}-{s}", .{ @tagName(self.arch), @tagName(self.os), @tagName(self.env) });
         } else {
             try writer.print("{s}-{s}-{s}-{s}", .{ @tagName(self.arch), @tagName(self.vendor), @tagName(self.os), @tagName(self.env) });
         }
@@ -106,8 +108,8 @@ pub const Arch = enum {
     x86_64,
     x86_64h,
 
-    pub fn fromZig(arch: std.Target.Cpu.Arch) error{Unsupported}!Arch {
-        return switch (arch) {
+    pub fn fromZig(target: std.Target) error{Unsupported}!Arch {
+        return switch (target.cpu.arch) {
             .aarch64 => .aarch64,
             .aarch64_be => .aarch64_be,
             .arm => .arm,
@@ -128,7 +130,14 @@ pub const Arch = enum {
             .powerpc => .powerpc,
             .powerpc64 => .powerpc64,
             .powerpc64le => .powerpc64le,
-            .riscv64 => .riscv64,
+            .riscv64 => blk: {
+                // Rust only seems to have `riscv64-` for `linux-android`, `riscv64gc-` for
+                // everything else. In fact they do the same translation in rust-bindgen:
+                // https://github.com/rust-lang/rust-bindgen/blob/f518815cc14a7f8c292964bb37179a1070d7e18a/bindgen/lib.rs#L1341-L1344
+                if (target.os.tag == .linux and
+                    target.abi == .android) break :blk .riscv64;
+                break :blk .riscv64gc;
+            },
             .s390x => .s390x,
             .sparc => .sparc,
             .sparc64 => .sparc64,
@@ -168,10 +177,7 @@ pub const Vendor = enum {
             .windows => .pc,
             .solaris => .sun,
             .cuda => .nvidia,
-            else => {
-                if (target.abi == .android) return .linux;
-                return .unknown;
-            },
+            else => .unknown,
         };
     }
 };
@@ -246,6 +252,7 @@ pub const Os = enum {
 };
 
 pub const Env = enum {
+    android,
     androideabi,
     eabi,
     eabihf,
@@ -277,16 +284,25 @@ pub const Env = enum {
     spe,
     uclibceabi,
 
-    pub fn fromZig(abi: std.Target.Abi) error{Unsupported}!Env {
-        return switch (abi) {
+    pub fn fromZig(target: std.Target) error{Unsupported}!Env {
+        return switch (target.abi) {
             .none => .none,
-            .gnu => .gnu,
+            .gnu => blk: {
+                // Rust only seems to have `-msvc` and `-gnullvm` for `aarch64-windows`
+                // https://doc.rust-lang.org/rustc/platform-support/pc-windows-gnullvm.html
+                if (target.cpu.arch == .aarch64 and
+                    target.os.tag == .windows) break :blk .gnullvm;
+                break :blk .gnu;
+            },
             .gnuabi64 => .gnuabi64,
-            .gnueabi => .gnuabi64,
+            .gnueabi => .gnueabi,
             .gnueabihf => .gnueabihf,
             .eabi => .eabi,
             .eabihf => .eabihf,
-            .android => .androideabi,
+            .android => switch (target.cpu.arch) {
+                .aarch64, .riscv64, .x86, .x86_64 => .android,
+                else => .androideabi,
+            },
             .musl => .musl,
             .musleabi => .musleabi,
             .musleabihf => .musleabihf,
@@ -303,6 +319,8 @@ test "tier 1" {
     const allocator = arena.allocator();
     const expectEqualStrings = std.testing.expectEqualStrings;
 
+    // https://doc.rust-lang.org/rustc/platform-support.html#tier-1-with-host-tools
+
     {
         const target = try Target.fromArchOsAbi("aarch64-macos");
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
@@ -313,12 +331,6 @@ test "tier 1" {
         const target = try Target.fromArchOsAbi("aarch64-linux-gnu");
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("aarch64-unknown-linux-gnu", target_str);
-    }
-
-    {
-        const target = try Target.fromArchOsAbi("aarch64-windows-msvc");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
-        try expectEqualStrings("aarch64-pc-windows-msvc", target_str);
     }
 
     {
@@ -350,10 +362,122 @@ test "tier 1" {
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("x86_64-pc-windows-gnu", target_str);
     }
+}
+
+test "tier 2" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const expectEqualStrings = std.testing.expectEqualStrings;
+
+    // https://doc.rust-lang.org/rustc/platform-support.html#tier-2-with-host-tools
+
+    {
+        const target = try Target.fromArchOsAbi("aarch64-windows-msvc");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("aarch64-pc-windows-msvc", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("aarch64-linux-musl");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("aarch64-unknown-linux-musl", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("arm-linux-gnueabi");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("arm-unknown-linux-gnueabi", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("arm-linux-gnueabihf");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("arm-unknown-linux-gnueabihf", target_str);
+    }
+
+    // Omitted: armv7-unknown-linux-gnueabihf
+
+    {
+        const target = try Target.fromArchOsAbi("loongarch64-linux-gnu");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("loongarch64-unknown-linux-gnu", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("loongarch64-linux-musl");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("loongarch64-unknown-linux-musl", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("powerpc-linux-gnu");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("powerpc-unknown-linux-gnu", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("powerpc64-linux-gnu");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("powerpc64-unknown-linux-gnu", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("powerpc64le-linux-gnu");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("powerpc64le-unknown-linux-gnu", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("riscv64-linux-gnu");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("riscv64gc-unknown-linux-gnu", target_str);
+    }
+
+    // https://doc.rust-lang.org/rustc/platform-support.html#tier-2-without-host-tools
+
+    {
+        const target = try Target.fromArchOsAbi("aarch64-linux-android");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("aarch64-linux-android", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("arm-linux-android");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("arm-linux-androideabi", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("x86-linux-android");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("i686-linux-android", target_str);
+    }
 
     {
         const target = try Target.fromArchOsAbi("wasm32-wasi");
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("wasm32-wasi", target_str);
+    }
+}
+
+test "tier 3" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const expectEqualStrings = std.testing.expectEqualStrings;
+
+    // https://doc.rust-lang.org/rustc/platform-support.html#tier-3
+
+    {
+        const target = try Target.fromArchOsAbi("riscv64-linux-musl");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("riscv64gc-unknown-linux-musl", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("riscv64-linux-android");
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("riscv64-linux-android", target_str);
     }
 }
