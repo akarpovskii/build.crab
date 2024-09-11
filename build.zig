@@ -214,8 +214,16 @@ pub fn addRustStaticlib(b: *std.Build, config: StaticlibConfig, args: anytype) s
     return crate_lib_path;
 }
 
+inline fn getFields(args: anytype) []const std.builtin.Type.StructField {
+    // 'Struct' got renamed to 'struct', for compatibility with Zig 0.13 we check both for now.
+    return if (@hasField(@TypeOf(@typeInfo(@TypeOf(args))), "Struct"))
+        @typeInfo(@TypeOf(args)).Struct.fields
+    else
+        @typeInfo(@TypeOf(args)).@"struct".fields;
+}
+
 fn targetFromUserInputOptions(args: anytype) std.Target {
-    inline for (@typeInfo(@TypeOf(args)).Struct.fields) |field| {
+    inline for (getFields(args)) |field| {
         const v = @field(args, field.name);
         const T = @TypeOf(v);
         switch (T) {
@@ -232,7 +240,7 @@ fn targetFromUserInputOptions(args: anytype) std.Target {
 fn overrideTargetUserInput(args: anytype) @TypeOf(args) {
     var new_args = args;
     const host_target = @import("builtin").target;
-    inline for (@typeInfo(@TypeOf(new_args)).Struct.fields) |field| {
+    inline for (getFields(new_args)) |field| {
         const v = &@field(new_args, field.name);
         const T = field.type;
         switch (T) {
