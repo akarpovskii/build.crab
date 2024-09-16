@@ -109,7 +109,6 @@ pub const Arch = enum {
     pub fn fromZig(arch: std.Target.Cpu.Arch) error{Unsupported}!Arch {
         return switch (arch) {
             .aarch64 => .aarch64,
-            .aarch64_32 => error.Unsupported,
             .aarch64_be => .aarch64_be,
             .arm => .arm,
             .armeb => .armeb,
@@ -223,7 +222,6 @@ pub const Os = enum {
             .freebsd => .freebsd,
             .fuchsia => .fuchsia,
             .ios => .ios,
-            .kfreebsd => .freebsd,
             .linux => .linux,
             .macos => .darwin,
             .netbsd => .netbsd,
