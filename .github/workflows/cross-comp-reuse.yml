@@ -25,7 +25,7 @@ jobs:
       - uses: goto-bus-stop/setup-zig@2a9625d550eefc3a9b1a43d342ad655f563f8241
         with:
           version: 0.13.0
-      - uses: dtolnay/rust-toolchain@stable
+      - uses: dtolnay/rust-toolchain@1.80.1
         with:
             targets: ${{ inputs.target-rust }}
 
