@@ -10,7 +10,7 @@ Cross-compilation is supported.
 ## Usage
 
 ```sh
-zig fetch --save https://github.com/akarpovskii/build.crab/archive/refs/tags/v0.1.6.tar.gz
+zig fetch --save https://github.com/akarpovskii/build.crab/archive/refs/tags/v0.1.7.tar.gz
 ```
 
 In `build.zig` (replace `crate` with the name of your crate):
