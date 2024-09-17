@@ -199,18 +199,18 @@ pub fn addRustStaticlib(b: *std.Build, config: StaticlibConfig, args: anytype) s
         .target = config.target,
     };
     const crate_output = addCargoBuild(b, cargo_config, args);
-    var crate_lib_path = crate_output.path(b, config.name);
+    const crate_lib_path = crate_output.path(b, config.name);
 
-    const zig_target = targetFromUserInputOptions(args);
-    if (zig_target.os.tag == .windows) {
-        crate_lib_path = addStripSymbols(b, .{
-            .name = config.name,
-            .archive = crate_lib_path,
-            .symbols = &.{
-                "___chkstk_ms",
-            },
-        }, args);
-    }
+    // const zig_target = targetFromUserInputOptions(args);
+    // if (zig_target.os.tag == .windows) {
+    //     crate_lib_path = addStripSymbols(b, .{
+    //         .name = config.name,
+    //         .archive = crate_lib_path,
+    //         .symbols = &.{
+    //             "___chkstk_ms",
+    //         },
+    //     }, args);
+    // }
     return crate_lib_path;
 }
 
