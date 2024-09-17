@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: mlugg/setup-zig@v1
         with:
-          version: master
+          version: 0.14.0-dev.1576+5d7fa5513
       - uses: dtolnay/rust-toolchain@1.80.1
         with:
             targets: ${{ inputs.target-rust }}
@@ -47,7 +47,7 @@ jobs:
       - name: Build example
         run: |
           cd example
-          zig build -Dtarget=${{ inputs.target }} -Dzigbuild=${{ inputs.target == 'aarch64-macos' }} -j1 --summary all
+          zig build -Dtarget=${{ inputs.target }} -Dzigbuild=${{ inputs.target == 'aarch64-macos' }} -j1 --summary all --verbose
 
       - name: Tar pack
         run: tar -cvf artifacts.tar -C example zig-out
