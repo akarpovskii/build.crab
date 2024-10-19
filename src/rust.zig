@@ -34,14 +34,18 @@ pub const Target = struct {
     pub fn format(self: Target, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt_spec;
         _ = options;
+        const vendor = switch (self.vendor) {
+            .custom => |name| name,
+            else => |vendor| @tagName(vendor),
+        };
         if (self.arch == .wasm32 and self.os == .wasi) {
             try writer.print("{s}-{s}", .{ @tagName(self.arch), @tagName(self.os) });
         } else if (self.env == .none) {
-            try writer.print("{s}-{s}-{s}", .{ @tagName(self.arch), @tagName(self.vendor), @tagName(self.os) });
+            try writer.print("{s}-{s}-{s}", .{ @tagName(self.arch), vendor, @tagName(self.os) });
         } else if (self.vendor == .unknown and (self.env == .android or self.env == .androideabi)) {
             try writer.print("{s}-{s}-{s}", .{ @tagName(self.arch), @tagName(self.os), @tagName(self.env) });
         } else {
-            try writer.print("{s}-{s}-{s}-{s}", .{ @tagName(self.arch), @tagName(self.vendor), @tagName(self.os), @tagName(self.env) });
+            try writer.print("{s}-{s}-{s}-{s}", .{ @tagName(self.arch), vendor, @tagName(self.os), @tagName(self.env) });
         }
     }
 };
@@ -155,7 +159,7 @@ pub const Arch = enum {
     }
 };
 
-pub const Vendor = enum {
+pub const Vendor = union(enum) {
     apple,
     esp,
     fortanix,
@@ -173,6 +177,7 @@ pub const Vendor = enum {
     unknown,
     uwp,
     wrc,
+    custom: []const u8,
 
     pub fn fromZig(target: std.Target) error{Unsupported}!Vendor {
         return switch (target.os.tag) {
@@ -436,6 +441,18 @@ test "tier 2" {
         const target = try Target.fromArchOsAbi("riscv64-linux-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("riscv64gc-unknown-linux-gnu", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("x86_64-linux-musl", .{});
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("x86_64-unknown-linux-musl", target_str);
+    }
+
+    {
+        const target = try Target.fromArchOsAbi("x86_64-linux-musl", .{ .vendor = .{ .custom = "alpine" } });
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("x86_64-alpine-linux-musl", target_str);
     }
 
     // https://doc.rust-lang.org/rustc/platform-support.html#tier-2-without-host-tools
