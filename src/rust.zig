@@ -6,25 +6,29 @@ pub const Target = struct {
     os: Os,
     env: Env,
 
-    pub fn fromZig(target: std.Target) error{Unsupported}!Target {
+    const Options = struct {
+        vendor: ?Vendor = null,
+    };
+
+    pub fn fromZig(target: std.Target, options: Options) error{Unsupported}!Target {
         return .{
             .arch = try Arch.fromZig(target),
-            .vendor = try Vendor.fromZig(target),
+            .vendor = options.vendor orelse try Vendor.fromZig(target),
             .os = try Os.fromZig(target.os),
             .env = try Env.fromZig(target),
         };
     }
 
-    pub fn fromQuery(query: std.Target.Query) !Target {
+    pub fn fromQuery(query: std.Target.Query, options: Options) !Target {
         const target = try std.zig.system.resolveTargetQuery(query);
-        return fromZig(target);
+        return fromZig(target, options);
     }
 
-    pub fn fromArchOsAbi(arch_os_abi: []const u8) !Target {
+    pub fn fromArchOsAbi(arch_os_abi: []const u8, options: Options) !Target {
         const query = try std.Target.Query.parse(.{
             .arch_os_abi = arch_os_abi,
         });
-        return fromQuery(query);
+        return fromQuery(query, options);
     }
 
     pub fn format(self: Target, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
@@ -322,43 +326,43 @@ test "tier 1" {
     // https://doc.rust-lang.org/rustc/platform-support.html#tier-1-with-host-tools
 
     {
-        const target = try Target.fromArchOsAbi("aarch64-macos");
+        const target = try Target.fromArchOsAbi("aarch64-macos", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("aarch64-apple-darwin", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("aarch64-linux-gnu");
+        const target = try Target.fromArchOsAbi("aarch64-linux-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("aarch64-unknown-linux-gnu", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("x86_64-macos");
+        const target = try Target.fromArchOsAbi("x86_64-macos", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("x86_64-apple-darwin", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("x86_64-linux-gnu");
+        const target = try Target.fromArchOsAbi("x86_64-linux-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("x86_64-unknown-linux-gnu", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("x86-windows-gnu");
+        const target = try Target.fromArchOsAbi("x86-windows-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("i686-pc-windows-gnu", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("x86-linux-gnu");
+        const target = try Target.fromArchOsAbi("x86-linux-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("i686-unknown-linux-gnu", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("x86_64-windows-gnu");
+        const target = try Target.fromArchOsAbi("x86_64-windows-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("x86_64-pc-windows-gnu", target_str);
     }
@@ -373,25 +377,25 @@ test "tier 2" {
     // https://doc.rust-lang.org/rustc/platform-support.html#tier-2-with-host-tools
 
     {
-        const target = try Target.fromArchOsAbi("aarch64-windows-msvc");
+        const target = try Target.fromArchOsAbi("aarch64-windows-msvc", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("aarch64-pc-windows-msvc", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("aarch64-linux-musl");
+        const target = try Target.fromArchOsAbi("aarch64-linux-musl", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("aarch64-unknown-linux-musl", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("arm-linux-gnueabi");
+        const target = try Target.fromArchOsAbi("arm-linux-gnueabi", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("arm-unknown-linux-gnueabi", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("arm-linux-gnueabihf");
+        const target = try Target.fromArchOsAbi("arm-linux-gnueabihf", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("arm-unknown-linux-gnueabihf", target_str);
     }
@@ -399,37 +403,37 @@ test "tier 2" {
     // Omitted: armv7-unknown-linux-gnueabihf
 
     {
-        const target = try Target.fromArchOsAbi("loongarch64-linux-gnu");
+        const target = try Target.fromArchOsAbi("loongarch64-linux-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("loongarch64-unknown-linux-gnu", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("loongarch64-linux-musl");
+        const target = try Target.fromArchOsAbi("loongarch64-linux-musl", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("loongarch64-unknown-linux-musl", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("powerpc-linux-gnu");
+        const target = try Target.fromArchOsAbi("powerpc-linux-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("powerpc-unknown-linux-gnu", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("powerpc64-linux-gnu");
+        const target = try Target.fromArchOsAbi("powerpc64-linux-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("powerpc64-unknown-linux-gnu", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("powerpc64le-linux-gnu");
+        const target = try Target.fromArchOsAbi("powerpc64le-linux-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("powerpc64le-unknown-linux-gnu", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("riscv64-linux-gnu");
+        const target = try Target.fromArchOsAbi("riscv64-linux-gnu", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("riscv64gc-unknown-linux-gnu", target_str);
     }
@@ -437,25 +441,25 @@ test "tier 2" {
     // https://doc.rust-lang.org/rustc/platform-support.html#tier-2-without-host-tools
 
     {
-        const target = try Target.fromArchOsAbi("aarch64-linux-android");
+        const target = try Target.fromArchOsAbi("aarch64-linux-android", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("aarch64-linux-android", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("arm-linux-android");
+        const target = try Target.fromArchOsAbi("arm-linux-android", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("arm-linux-androideabi", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("x86-linux-android");
+        const target = try Target.fromArchOsAbi("x86-linux-android", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("i686-linux-android", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("wasm32-wasi");
+        const target = try Target.fromArchOsAbi("wasm32-wasi", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("wasm32-wasi", target_str);
     }
@@ -470,13 +474,13 @@ test "tier 3" {
     // https://doc.rust-lang.org/rustc/platform-support.html#tier-3
 
     {
-        const target = try Target.fromArchOsAbi("riscv64-linux-musl");
+        const target = try Target.fromArchOsAbi("riscv64-linux-musl", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("riscv64gc-unknown-linux-musl", target_str);
     }
 
     {
-        const target = try Target.fromArchOsAbi("riscv64-linux-android");
+        const target = try Target.fromArchOsAbi("riscv64-linux-android", .{});
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("riscv64-linux-android", target_str);
     }
