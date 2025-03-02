@@ -6,7 +6,7 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("build.crab", .{
+    _ = b.addModule("build_crab", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
@@ -84,11 +84,11 @@ const CargoConfig = struct {
 /// If you need more flexibility, `build_crab` artifact can be used directly.
 /// The `args` parameter is passed to `b.dependency`.
 /// Use `args.target` to specify the target for cross-compilation.
-/// Use `args.optimize` to set the optimization level of `build.crab` binaries.
+/// Use `args.optimize` to set the optimization level of `build_crab` binaries.
 pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Build.LazyPath {
     const dep_args = overrideTargetUserInput(args);
-    const @"build.crab" = b.dependency("build.crab", dep_args);
-    const build_crab = b.addRunArtifact(@"build.crab".artifact("build_crab"));
+    const build_crab_dep = b.dependency("build_crab", dep_args);
+    const build_crab = b.addRunArtifact(build_crab_dep.artifact("build_crab"));
 
     build_crab.addArg("--command");
     build_crab.addArg(config.command);
@@ -140,11 +140,11 @@ const StripSymbolsConfig = struct {
 /// If you need more flexibility, `strip_symbols` artifact can be used directly.
 /// The `args` parameter is passed to `b.dependency`.
 /// Use `args.target` to specify the target for cross-compilation.
-/// Use `args.optimize` to set the optimization level of `build.crab` binaries.
+/// Use `args.optimize` to set the optimization level of `build_crab` binaries.
 pub fn addStripSymbols(b: *std.Build, config: StripSymbolsConfig, args: anytype) std.Build.LazyPath {
     const dep_args = overrideTargetUserInput(args);
-    const @"build.crab" = b.dependency("build.crab", dep_args);
-    const strip_symbols = b.addRunArtifact(@"build.crab".artifact("strip_symbols"));
+    const build_crab = b.dependency("build_crab", dep_args);
+    const strip_symbols = b.addRunArtifact(build_crab.artifact("strip_symbols"));
 
     strip_symbols.addArg("--archive");
     strip_symbols.addFileArg(config.archive);
@@ -190,7 +190,7 @@ const StaticlibConfig = struct {
 /// Returns a path to the generated library file.
 /// The `args` parameter is passed to `b.dependency`.
 /// Use `args.target` to specify the target for cross-compilation.
-/// Use `args.optimize` to set the optimization level of `build.crab` binaries.
+/// Use `args.optimize` to set the optimization level of `build_crab` binaries.
 pub fn addRustStaticlib(b: *std.Build, config: StaticlibConfig, args: anytype) std.Build.LazyPath {
     const cargo_config: CargoConfig = .{
         .manifest_path = config.manifest_path,

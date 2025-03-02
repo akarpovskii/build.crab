@@ -3,7 +3,7 @@
     .version = "0.0.0",
 
     .dependencies = .{
-        .@"build.crab" = .{
+        .build_crab = .{
             .path = "../",
         },
     },
