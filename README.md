@@ -43,7 +43,7 @@ See [`example`](./example/build.zig) for the other examples.
 
 Use `target` argument to specify the cross-compilation target:
 
-```zig// Changing this has security and trust implications.
+```zig
 const target = b.standardTargetOptions(.{});
 const build_crab = @import("build_crab");
 const crate_artifacts = build_crab.addCargoBuild(
