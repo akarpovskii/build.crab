@@ -5,7 +5,7 @@ Cross-compilation is supported.
 
 ## Requirements
 
-* Zig >= 0.13.0
+Please see `.minimum_zig_version` field of the `build.zig.zon` file.
 
 ## Usage
 
@@ -15,7 +15,7 @@ zig fetch --save https://github.com/akarpovskii/build.crab/archive/refs/tags/v0.
 
 In `build.zig` (replace `crate` with the name of your crate):
 ```zig
-const build_crab = @import("build.crab");
+const build_crab = @import("build_crab");
 const crate_artifacts = build_crab.addCargoBuild(
     b,
     .{
@@ -43,9 +43,9 @@ See [`example`](./example/build.zig) for the other examples.
 
 Use `target` argument to specify the cross-compilation target:
 
-```zig
+```zig// Changing this has security and trust implications.
 const target = b.standardTargetOptions(.{});
-const build_crab = @import("build.crab");
+const build_crab = @import("build_crab");
 const crate_artifacts = build_crab.addCargoBuild(
     b,
     .{
@@ -78,7 +78,7 @@ So if you want to link against a Rust library that needs these intrinsics, you s
 For this purpose, `build.crab` provides an additional artifact called `strip_symbols` that repacks `.a` archive removing `.o` files containing conflicting functions (provided by the user).
 
 ```zig
-const crate_lib_path = @import("build.crab").addStripSymbols(b, .{
+const crate_lib_path = @import("build_crab").addStripSymbols(b, .{
     .name = "libcrate.a",
     .archive = b.path("path/to/libcrate.a"),
     .symbols = &.{
