@@ -6,3 +6,5 @@ build-*/
 docgen_tmp/
 cache/
 .zig-cache
+
+.DS_Store

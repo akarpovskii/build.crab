@@ -25,9 +25,9 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
-      - uses: goto-bus-stop/setup-zig@2a9625d550eefc3a9b1a43d342ad655f563f8241
+      - uses: mlugg/setup-zig@v1
         with:
-          version: 0.13.0
+          version: 0.14.0-dev.3445+6c3cbb0c8
       - uses: dtolnay/rust-toolchain@1.80.1
         with:
               targets: ${{ matrix.platform[1] }}
