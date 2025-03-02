@@ -63,15 +63,30 @@ See [`rust.zig`](src/rust.zig) and the tests at the bottom to know how the conve
 
 ## Windows
 
-![Hydra meme with Windows as the weird head!](./images/windows%20is%20the%20weird%20one.jpeg)
-
-Windows, as always, is the weird one.
+### Toolchain
 
 By default, Rust on Windows targets MSVC toolchain. This creates additional problems as you have to link against msvcrt, etc.
 
 If you want to avoid that, you can target windows-gnu. This is the default behavior of `build.crab`.
 
-But that has its own problems since both Rust and Zig provide `compiler_rt.lib` with most of the symbols having weak linking, but not `___chkstk` and `___chkstk_ms`.
+### Unused symbols
+
+I recommend adding the following parameters to `Cargo.toml`:
+
+```toml
+[profile.release]
+opt-level = "z"  # Optimize for size.
+strip = true
+lto = true
+```
+
+Otherwise, you will have to link some obscure Windows libraries even if you don't use them.
+
+And it also makes the size of the rust library smaller.
+
+### Duplicate symbols [obsolete since Zig 0.14.0 / build.crab 0.1.8]
+
+Both Rust and Zig provide `compiler_rt.lib` with most of the symbols having weak linking, but not `___chkstk` and `___chkstk_ms`.
 
 So if you want to link against a Rust library that needs these intrinsics, you should somehow resolve the conflict (though I'm not completely sure that it is safe to do).
 
@@ -91,16 +106,3 @@ module.linkSystemLibrary("crate", .{});
 ```
 
 If you use `addRustStaticlib`, this is already taken care of for you. See the [`buid.zig`](./example/build.zig) for a complete example.
-
-On top of that, I recommend adding the following parameters to `Cargo.toml`:
-
-```toml
-[profile.release]
-opt-level = "z"  # Optimize for size.
-strip = true
-lto = true
-```
-
-Otherwise, you again will have to link some obscure Windows libraries even if you don't use them.
-
-And it also makes the size of the rust library smaller.
