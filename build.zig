@@ -211,7 +211,7 @@ const StaticlibConfig = struct {
 
     /// Target architecture.
     /// If null, build.zig will use gnu ABI on Windows.
-    target: ?[]const u8 = null,
+    rust_target: CargoConfig.Target = .{ .override = .{} },
 };
 
 /// Deprecated: addStripSymbols no longer necessary, use addCargoBuild instead.
@@ -227,7 +227,7 @@ pub fn addRustStaticlib(b: *std.Build, config: StaticlibConfig, args: anytype) s
         .manifest_path = config.manifest_path,
         .command = config.command,
         .cargo_args = config.cargo_args,
-        .target = config.target,
+        .rust_target = config.rust_target,
     };
     const crate_output = addCargoBuild(b, cargo_config, args);
     const crate_lib_path = crate_output.path(b, config.name);
