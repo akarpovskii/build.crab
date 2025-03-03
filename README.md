@@ -61,6 +61,29 @@ const crate_artifacts = build_crab.addCargoBuild(
 
 See [`rust.zig`](src/rust.zig) and the tests at the bottom to know how the conversion is done.
 
+## Override Rust target
+
+Use `rust_target` from `CargoConfig` to override the `--target` argument passed to `cargo build`:
+
+```zig
+const target = b.standardTargetOptions(.{});
+const build_crab = @import("build_crab");
+const crate_artifacts = build_crab.addCargoBuild(
+    b,
+    .{
+        .rust_target = .{
+            // Override only some parts
+            .override = .{ .vendor = .{ .custom = "alpine" } },
+
+            // Or specify the value explicitly
+            // .value = "x86_64-alpine-linux-musl",
+        },
+        ...
+    },
+    ...
+);
+```
+
 ## Windows
 
 ### Toolchain

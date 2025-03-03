@@ -2,6 +2,8 @@ const std = @import("std");
 
 pub usingnamespace @import("src/root.zig");
 
+const BuildCrab = @This();
+
 pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
@@ -76,7 +78,31 @@ const CargoConfig = struct {
 
     /// Target architecture.
     /// If null, build.zig will use gnu ABI on Windows.
-    target: ?[]const u8 = null,
+    target: Target = .{ .override = .{} },
+
+    pub const Target = union(enum) {
+        value: []const u8,
+        override: PartialTarget,
+    };
+
+    pub const PartialTarget = struct {
+        arch: ?BuildCrab.Arch = null,
+        vendor: ?BuildCrab.Vendor = null,
+        os: ?BuildCrab.Os = null,
+        env: ?BuildCrab.Env = null,
+
+        pub fn override(self: PartialTarget, target: BuildCrab.Target) BuildCrab.Target {
+            var result = target;
+            inline for (@typeInfo(@TypeOf(self)).@"struct".fields) |field| {
+                const sf = @field(self, field.name);
+                const rf = &@field(result, field.name);
+                if (sf) |non_null| {
+                    rf.* = non_null;
+                }
+            }
+            return result;
+        }
+    };
 };
 
 /// Adds all the steps and dependencies required to build a Rust crate.
@@ -104,19 +130,21 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Buil
 
     build_crab.addArg("--");
 
-    const zig_target = targetFromUserInputOptions(args);
-
-    if (config.target) |target| {
-        build_crab.addArg("--target");
-        build_crab.addArg(target);
-    } else {
-        var target = zig_target;
-        if (zig_target.os.tag == .windows) {
-            target.abi = .gnu;
-        }
-        const rust_target = @This().Target.fromZig(target) catch @panic("unable to convert target triple to Rust");
-        build_crab.addArg("--target");
-        build_crab.addArg(b.fmt("{}", .{rust_target}));
+    switch (config.target) {
+        .value => {
+            build_crab.addArg("--target");
+            build_crab.addArg(config.target.value);
+        },
+        .override => {
+            var zig_target = targetFromUserInputOptions(args);
+            if (zig_target.os.tag == .windows) {
+                zig_target.abi = .gnu;
+            }
+            var rust_target = BuildCrab.Target.fromZig(zig_target) catch @panic("unable to convert target triple to Rust");
+            rust_target = config.target.override.override(rust_target);
+            build_crab.addArg("--target");
+            build_crab.addArg(b.fmt("{}", .{rust_target}));
+        },
     }
 
     build_crab.addArgs(config.cargo_args);
@@ -206,16 +234,8 @@ pub fn addRustStaticlib(b: *std.Build, config: StaticlibConfig, args: anytype) s
     return crate_lib_path;
 }
 
-inline fn getFields(args: anytype) []const std.builtin.Type.StructField {
-    // 'Struct' got renamed to 'struct', for compatibility with Zig 0.13 we check both for now.
-    return if (@hasField(@TypeOf(@typeInfo(@TypeOf(args))), "Struct"))
-        @typeInfo(@TypeOf(args)).Struct.fields
-    else
-        @typeInfo(@TypeOf(args)).@"struct".fields;
-}
-
 fn targetFromUserInputOptions(args: anytype) std.Target {
-    inline for (getFields(args)) |field| {
+    inline for (@typeInfo(@TypeOf(args)).@"struct".fields) |field| {
         const v = @field(args, field.name);
         const T = @TypeOf(v);
         switch (T) {
@@ -232,7 +252,7 @@ fn targetFromUserInputOptions(args: anytype) std.Target {
 fn overrideTargetUserInput(args: anytype) @TypeOf(args) {
     var new_args = args;
     const host_target = @import("builtin").target;
-    inline for (getFields(new_args)) |field| {
+    inline for (@typeInfo(@TypeOf(args)).@"struct".fields) |field| {
         const v = &@field(new_args, field.name);
         const T = field.type;
         switch (T) {
