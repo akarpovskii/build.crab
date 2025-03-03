@@ -78,7 +78,7 @@ const CargoConfig = struct {
 
     /// Target architecture.
     /// If null, build.zig will use gnu ABI on Windows.
-    target: Target = .{ .override = .{} },
+    rust_target: Target = .{ .override = .{} },
 
     pub const Target = union(enum) {
         value: []const u8,
@@ -130,10 +130,10 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Buil
 
     build_crab.addArg("--");
 
-    switch (config.target) {
+    switch (config.rust_target) {
         .value => {
             build_crab.addArg("--target");
-            build_crab.addArg(config.target.value);
+            build_crab.addArg(config.rust_target.value);
         },
         .override => {
             var zig_target = targetFromUserInputOptions(args);
@@ -141,7 +141,7 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Buil
                 zig_target.abi = .gnu;
             }
             var rust_target = BuildCrab.Target.fromZig(zig_target) catch @panic("unable to convert target triple to Rust");
-            rust_target = config.target.override.override(rust_target);
+            rust_target = config.rust_target.override.override(rust_target);
             build_crab.addArg("--target");
             build_crab.addArg(b.fmt("{}", .{rust_target}));
         },
