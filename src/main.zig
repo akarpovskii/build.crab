@@ -139,7 +139,7 @@ pub fn main() !void {
             try std.fs.Dir.copyFile(cwd, artifact, dst_dir, basename, .{});
         }
 
-        if (deps_file) |path| {
+        if (deps_file) |deps_path| {
             const artifact = filenames[0];
             const dirname = std.fs.path.dirname(artifact) orelse @panic("dirname cannot be null");
             const stem = std.fs.path.stem(artifact);
@@ -149,21 +149,114 @@ pub fn main() !void {
             const artifact_d = try std.mem.concat(allocator, u8, &.{ without_extension, ".d" });
             defer allocator.free(artifact_d);
 
-            std.log.debug("About to copy '{s}' to '{s}'", .{ artifact_d, path });
+            std.log.debug("About to copy '{s}' to '{s}'", .{ artifact_d, deps_path });
 
-            const src = try cwd.openFile(artifact_d, .{ .mode = .read_only });
-            defer src.close();
-
-            const dst = cwd.openFile(path, .{ .mode = .read_write }) catch |e| switch (e) {
-                error.FileNotFound => try cwd.createFile(path, .{ .read = true }),
+            const dst = cwd.openFile(deps_path, .{ .mode = .read_write }) catch |e| switch (e) {
+                error.FileNotFound => try cwd.createFile(deps_path, .{ .read = true }),
                 else => return e,
             };
             defer dst.close();
-
             const stat = try dst.stat();
             try dst.seekTo(stat.size);
-            // Should we add a new line?
-            try dst.writeFileAll(src, .{});
+
+            try write_dep_file(allocator, cwd, artifact_d, dst.writer().any());
         }
+    }
+}
+
+fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: []const u8, writer: std.io.AnyWriter) !void {
+    const dep_file_content = try cwd.readFileAlloc(allocator, dep_file_path, 100 * 1024 * 1024);
+    defer allocator.free(dep_file_content);
+
+    // std.Build.Cache does not support directories in the dep file.
+    // Iterate over prerequisite and ignore any directories.
+    var it: std.Build.Cache.DepTokenizer = .{ .bytes = dep_file_content };
+    while (it.next()) |token| {
+        switch (token) {
+            .target, .target_must_resolve => {
+                const target_path = if (token == .target) token.target else token.target_must_resolve;
+                try writer.writeAll(target_path);
+                try writer.writeAll(":");
+            },
+            .prereq, .prereq_must_resolve => {
+                var resolve_buf = std.ArrayList(u8).init(allocator);
+                defer resolve_buf.deinit();
+
+                const prereq_path = switch (token) {
+                    .prereq => token.prereq,
+                    .prereq_must_resolve => resolved: {
+                        try token.resolve(resolve_buf.writer());
+                        break :resolved resolve_buf.items;
+                    },
+                    else => unreachable,
+                };
+
+                const fstat = try cwd.statFile(prereq_path);
+                switch (fstat.kind) {
+                    // TODO: Symlinks?
+                    .file => {
+                        try writer.writeAll(" ");
+                        try writer.writeAll(prereq_path);
+                    },
+                    .directory => {
+                        try walk_dep_directory(allocator, try cwd.openDir(prereq_path, .{
+                            .iterate = true,
+                            .no_follow = true, // TODO: Symlinks?
+                        }), writer);
+                    },
+                    else => {},
+                }
+            },
+            else => |err| {
+                var error_buf = std.ArrayList(u8).init(allocator);
+                defer error_buf.deinit();
+                try err.printError(error_buf.writer());
+                @panic(try std.fmt.allocPrint(allocator, "failed parsing {s}: {s}", .{ dep_file_path, error_buf.items }));
+            },
+        }
+    }
+    try writer.writeAll("\n");
+}
+
+fn walk_dep_directory(allocator: std.mem.Allocator, root: std.fs.Dir, dep_writer: std.io.AnyWriter) !void {
+    var stack = std.ArrayList(std.fs.Dir).init(allocator);
+    try stack.append(root);
+
+    while (stack.items.len > 0) {
+        const directory: std.fs.Dir = stack.pop().?;
+        var it = directory.iterate();
+        while (try it.next()) |entry| {
+            switch (entry.kind) {
+                .directory => {
+                    try stack.append(try directory.openDir(entry.name, .{
+                        .iterate = true,
+                        .no_follow = true, // TODO: Symlinks?
+                    }));
+                },
+                // TODO: Symlinks?
+                .file => {
+                    try dep_writer.writeAll(" ");
+                    const full_path = try directory.realpathAlloc(allocator, entry.name);
+                    defer allocator.free(full_path);
+                    try render_filename(full_path, dep_writer);
+                },
+                else => {
+                    const full_path = try directory.realpathAlloc(allocator, entry.name);
+                    defer allocator.free(full_path);
+                    std.log.debug("Dep file: ignored {s} (not a file)", .{full_path});
+                },
+            }
+        }
+    }
+    return;
+}
+
+fn render_filename(token: []const u8, writer: std.io.AnyWriter) !void {
+    for (token) |c| {
+        switch (c) {
+            ' ' => try writer.writeByte('\\'),
+            else => {},
+        }
+        try writer.writeByte(c);
     }
 }
