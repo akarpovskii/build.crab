@@ -29,7 +29,7 @@ pub fn addRustStaticlib(
     folder: []const u8,
     zigbuild: bool,
 ) *std.Build.Step.Run {
-    var crate_lib_path = @import("build.crab").addRustStaticlib(
+    var crate_lib_path = @import("build_crab").addRustStaticlib(
         b,
         .{
             .name = "libcrate.a",
@@ -70,7 +70,7 @@ pub fn addCargoBuild(
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
 ) *std.Build.Step.Run {
-    const artifacts = @import("build.crab").addCargoBuild(
+    const artifacts = @import("build_crab").addCargoBuild(
         b,
         .{
             .manifest_path = b.path("hello_world/Cargo.toml"),
