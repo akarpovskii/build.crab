@@ -186,12 +186,15 @@ const StaticlibConfig = struct {
     target: ?[]const u8 = null,
 };
 
+/// Deprecated: addStripSymbols no longer necessary, use addCargoBuild instead.
+///
 /// A combination of `addCargoBuild` and `addStripSymbols` that strips `___chkstk_ms` on Windows.
 /// Returns a path to the generated library file.
 /// The `args` parameter is passed to `b.dependency`.
 /// Use `args.target` to specify the target for cross-compilation.
 /// Use `args.optimize` to set the optimization level of `build_crab` binaries.
 pub fn addRustStaticlib(b: *std.Build, config: StaticlibConfig, args: anytype) std.Build.LazyPath {
+    std.log.warn("deprecated: use addCargoBuild instead", .{});
     const cargo_config: CargoConfig = .{
         .manifest_path = config.manifest_path,
         .command = config.command,
@@ -200,17 +203,6 @@ pub fn addRustStaticlib(b: *std.Build, config: StaticlibConfig, args: anytype) s
     };
     const crate_output = addCargoBuild(b, cargo_config, args);
     const crate_lib_path = crate_output.path(b, config.name);
-
-    // const zig_target = targetFromUserInputOptions(args);
-    // if (zig_target.os.tag == .windows) {
-    //     crate_lib_path = addStripSymbols(b, .{
-    //         .name = config.name,
-    //         .archive = crate_lib_path,
-    //         .symbols = &.{
-    //             "___chkstk_ms",
-    //         },
-    //     }, args);
-    // }
     return crate_lib_path;
 }
 

@@ -7,10 +7,10 @@ pub fn build(b: *std.Build) void {
     const test_step = b.step("test", "Run unit tests");
     const zigbuild = b.option(bool, "zigbuild", "Use cargo zigbuild") orelse false;
 
-    const run_staticlib_test = addRustStaticlib(b, target, optimize, "staticlib", zigbuild);
+    const run_staticlib_test = linkRustLibrary(b, target, optimize, "staticlib", zigbuild);
     test_step.dependOn(&run_staticlib_test.step);
 
-    const run_cdylib_staticlib_test = addRustStaticlib(b, target, optimize, "cdylib_staticlib", zigbuild);
+    const run_cdylib_staticlib_test = linkRustLibrary(b, target, optimize, "cdylib_staticlib", zigbuild);
     test_step.dependOn(&run_cdylib_staticlib_test.step);
 
     // Exclude from cross-compilation
@@ -20,19 +20,18 @@ pub fn build(b: *std.Build) void {
     }
 }
 
-/// Demonstrates how to build a Rust static library and use it from Zig
+/// Demonstrates how to build a Rust library and use it from Zig
 /// See `src/root.zig` and `staticlib` crate for the source code.
-pub fn addRustStaticlib(
+pub fn linkRustLibrary(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
     optimize: std.builtin.OptimizeMode,
     folder: []const u8,
     zigbuild: bool,
 ) *std.Build.Step.Run {
-    var crate_lib_path = @import("build_crab").addRustStaticlib(
+    const crate_artifacts = @import("build_crab").addCargoBuild(
         b,
         .{
-            .name = "libcrate.a",
             .manifest_path = b.path(b.fmt("{s}/Cargo.toml", .{folder})),
             // This is part of the CI pipeline.
             // Normally, you don't need to use zigbuild and can leave the default value unchanged.
@@ -55,7 +54,8 @@ pub fn addRustStaticlib(
         .optimize = optimize,
     });
     lib_unit_tests.linkLibCpp();
-    lib_unit_tests.addLibraryPath(crate_lib_path.dirname());
+    // Link the library
+    lib_unit_tests.addLibraryPath(crate_artifacts);
     lib_unit_tests.root_module.linkSystemLibrary("crate", .{ .preferred_link_mode = .static });
 
     b.installArtifact(lib_unit_tests);
