@@ -82,10 +82,16 @@ pub const Arch = union(enum) {
     powerpc,
     powerpc64,
     powerpc64le,
+    riscv32,
+    riscv32e,
+    riscv32em,
+    riscv32emc,
     riscv32gc,
     riscv32i,
     riscv32im,
+    riscv32ima,
     riscv32imac,
+    riscv32imafc,
     riscv32imc,
     riscv64,
     riscv64gc,
@@ -107,6 +113,7 @@ pub const Arch = union(enum) {
     wasm64,
     x86_64,
     x86_64h,
+    xtensa,
 
     custom: []const u8,
 
@@ -132,6 +139,30 @@ pub const Arch = union(enum) {
             .powerpc => .powerpc,
             .powerpc64 => .powerpc64,
             .powerpc64le => .powerpc64le,
+            .riscv32 => blk: {
+                if (target.os.tag == .linux and (target.abi == .gnu or target.abi == .musl))
+                    break :blk .riscv32gc
+                else if (std.Target.riscv.featureSetHasAll(target.cpu.features, .{ .e, .m, .c }))
+                    break :blk .riscv32emc
+                else if (std.Target.riscv.featureSetHasAll(target.cpu.features, .{ .e, .m }))
+                    break :blk .riscv32em
+                else if (std.Target.riscv.featureSetHasAll(target.cpu.features, .{.e}))
+                    break :blk .riscv32e
+                else if (std.Target.riscv.featureSetHasAll(target.cpu.features, .{ .i, .m, .a, .f, .c }))
+                    break :blk .riscv32imafc
+                else if (std.Target.riscv.featureSetHasAll(target.cpu.features, .{ .i, .m, .a, .c }))
+                    break :blk .riscv32imac
+                else if (std.Target.riscv.featureSetHasAll(target.cpu.features, .{ .i, .m, .c }))
+                    break :blk .riscv32imc
+                else if (std.Target.riscv.featureSetHasAll(target.cpu.features, .{ .i, .m, .a }))
+                    break :blk .riscv32ima
+                else if (std.Target.riscv.featureSetHasAll(target.cpu.features, .{ .i, .m }))
+                    break :blk .riscv32im
+                else if (std.Target.riscv.featureSetHasAll(target.cpu.features, .{.i}))
+                    break :blk .riscv32i
+                else
+                    break :blk .riscv32;
+            },
             .riscv64 => blk: {
                 // Rust only seems to have `riscv64-` for `linux-android`, `riscv64gc-` for
                 // everything else. In fact they do the same translation in rust-bindgen:
@@ -147,7 +178,9 @@ pub const Arch = union(enum) {
             .wasm64 => .wasm64,
             .x86 => .i686,
             .x86_64 => .x86_64,
+            .xtensa => .xtensa,
 
+            // .amdgcn, .arc, .thumb, .thumbeb, .kalimba, .lanai, .loongarch32, .nvptx, .powerpcle, .propeller, .spirv, .spirv32, .spirv64, .ve, .xcore
             else => error.Unsupported,
         };
     }
@@ -229,6 +262,7 @@ pub const Os = union(enum) {
     psp,
     psx,
     redox,
+    rtems,
     solaris,
     solid_asp3,
     @"switch",
@@ -236,6 +270,7 @@ pub const Os = union(enum) {
     tvos,
     uefi,
     unknown,
+    visionos,
     vita,
     vxworks,
     wasip1,
@@ -276,6 +311,10 @@ pub const Os = union(enum) {
             .emscripten => .emscripten,
             .illumos => .illumos,
             .other => .unknown,
+            .rtems => .rtems,
+            .visionos => .visionos,
+
+            // .contiki, .elfiamcu, .plan9, .serenity, .zos, .driverkit, .ps3, .ps4, .ps5, .amdhsa, .amdpal, .mesa3d, .nvcl, .opencl, .opengl, .vulkan
             else => error.Unsupported,
         };
     }
@@ -306,6 +345,7 @@ pub const Env = union(enum) {
     gnueabihf,
     gnullvm,
     gnuspe,
+    gnux32,
     macabi,
     msvc,
     musl,
@@ -327,7 +367,14 @@ pub const Env = union(enum) {
 
     pub fn fromZig(target: std.Target) error{Unsupported}!Env {
         return switch (target.abi) {
-            .none => .none,
+            .none => blk: {
+                if (target.cpu.arch.isRISCV())
+                    break :blk switch (target.ofmt) {
+                        .elf => .elf,
+                        else => error.Unsupported,
+                    };
+                break :blk .none;
+            },
             .gnu => blk: {
                 // Rust only seems to have `-msvc` and `-gnullvm` for `aarch64-windows`
                 // https://doc.rust-lang.org/rustc/platform-support/pc-windows-gnullvm.html
@@ -338,17 +385,25 @@ pub const Env = union(enum) {
             .gnuabi64 => .gnuabi64,
             .gnueabi => .gnueabi,
             .gnueabihf => .gnueabihf,
+            .gnuilp32 => .gnu_ilp32,
+            .gnux32 => .gnux32,
             .eabi => .eabi,
             .eabihf => .eabihf,
             .android => switch (target.cpu.arch) {
                 .aarch64, .riscv64, .x86, .x86_64 => .android,
                 else => .androideabi,
             },
+            .androideabi => .androideabi,
             .musl => .musl,
+            .muslabi64 => .muslabi64,
             .musleabi => .musleabi,
             .musleabihf => .musleabihf,
             .msvc => .msvc,
             .macabi => .macabi,
+            .ohos => .ohos,
+            .simulator => .sim,
+
+            // .code16, .itanium, .cygnus, .gnuabin32, .gnuf32, .gnusf, .ilp32, .muslabin32, .muslx32, .ohoseabi
             else => error.Unsupported,
         };
     }
@@ -476,6 +531,66 @@ test "tier 2" {
         const target = try Target.fromArchOsAbi("powerpc64le-linux-gnu");
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("powerpc64le-unknown-linux-gnu", target_str);
+    }
+
+    {
+        const target = try Target.fromQuery(try std.Target.Query.parse(.{
+            .arch_os_abi = "riscv32-freestanding-none",
+            .cpu_features = "baseline+i-m-a-f-c",
+            .object_format = "elf",
+        }));
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("riscv32i-unknown-none-elf", target_str);
+    }
+
+    {
+        const target = try Target.fromQuery(try std.Target.Query.parse(.{
+            .arch_os_abi = "riscv32-freestanding-none",
+            .cpu_features = "baseline+i+m-a-f-c",
+            .object_format = "elf",
+        }));
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("riscv32im-unknown-none-elf", target_str);
+    }
+
+    {
+        const target = try Target.fromQuery(try std.Target.Query.parse(.{
+            .arch_os_abi = "riscv32-freestanding-none",
+            .cpu_features = "baseline+i+m+a-f-c",
+            .object_format = "elf",
+        }));
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("riscv32ima-unknown-none-elf", target_str);
+    }
+
+    {
+        const target = try Target.fromQuery(try std.Target.Query.parse(.{
+            .arch_os_abi = "riscv32-freestanding-none",
+            .cpu_features = "baseline+i+m-a-f+c",
+            .object_format = "elf",
+        }));
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("riscv32imc-unknown-none-elf", target_str);
+    }
+
+    {
+        const target = try Target.fromQuery(try std.Target.Query.parse(.{
+            .arch_os_abi = "riscv32-freestanding-none",
+            .cpu_features = "baseline+i+m+a-f+c",
+            .object_format = "elf",
+        }));
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("riscv32imac-unknown-none-elf", target_str);
+    }
+
+    {
+        const target = try Target.fromQuery(try std.Target.Query.parse(.{
+            .arch_os_abi = "riscv32-freestanding-none",
+            .cpu_features = "baseline+i+m+a+f+c",
+            .object_format = "elf",
+        }));
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("riscv32imafc-unknown-none-elf", target_str);
     }
 
     {
