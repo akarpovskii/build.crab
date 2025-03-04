@@ -1,9 +1,10 @@
 .{
-    .name = "example",
+    .name = .example,
     .version = "0.0.0",
+    .fingerprint = 0x6eec9b9fe7b9935b,
 
     .dependencies = .{
-        .@"build.crab" = .{
+        .build_crab = .{
             .path = "../",
         },
     },

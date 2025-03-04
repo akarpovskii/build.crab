@@ -30,19 +30,19 @@ pub const Target = struct {
     pub fn format(self: Target, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
         _ = fmt_spec;
         _ = options;
-        if (self.arch == .wasm32 and self.os == .wasi) {
-            try writer.print("{s}-{s}", .{ @tagName(self.arch), @tagName(self.os) });
+        if (self.arch == .wasm32 and (self.os == .wasip1 or self.os == .wasip2)) {
+            try writer.print("{s}-{s}", .{ self.arch, self.os });
         } else if (self.env == .none) {
-            try writer.print("{s}-{s}-{s}", .{ @tagName(self.arch), @tagName(self.vendor), @tagName(self.os) });
+            try writer.print("{s}-{s}-{s}", .{ self.arch, self.vendor, self.os });
         } else if (self.vendor == .unknown and (self.env == .android or self.env == .androideabi)) {
-            try writer.print("{s}-{s}-{s}", .{ @tagName(self.arch), @tagName(self.os), @tagName(self.env) });
+            try writer.print("{s}-{s}-{s}", .{ self.arch, self.os, self.env });
         } else {
-            try writer.print("{s}-{s}-{s}-{s}", .{ @tagName(self.arch), @tagName(self.vendor), @tagName(self.os), @tagName(self.env) });
+            try writer.print("{s}-{s}-{s}-{s}", .{ self.arch, self.vendor, self.os, self.env });
         }
     }
 };
 
-pub const Arch = enum {
+pub const Arch = union(enum) {
     aarch64,
     aarch64_be,
     arm,
@@ -108,6 +108,8 @@ pub const Arch = enum {
     x86_64,
     x86_64h,
 
+    custom: []const u8,
+
     pub fn fromZig(target: std.Target) error{Unsupported}!Arch {
         return switch (target.cpu.arch) {
             .aarch64 => .aarch64,
@@ -149,9 +151,18 @@ pub const Arch = enum {
             else => error.Unsupported,
         };
     }
+
+    pub fn format(self: Arch, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt_spec;
+        _ = options;
+        switch (self) {
+            .custom => try writer.print("{s}", .{self.custom}),
+            else => try writer.print("{s}", .{@tagName(self)}),
+        }
+    }
 };
 
-pub const Vendor = enum {
+pub const Vendor = union(enum) {
     apple,
     esp,
     fortanix,
@@ -170,6 +181,8 @@ pub const Vendor = enum {
     uwp,
     wrc,
 
+    custom: []const u8,
+
     pub fn fromZig(target: std.Target) error{Unsupported}!Vendor {
         return switch (target.os.tag) {
             .ios, .macos, .watchos, .tvos => .apple,
@@ -180,9 +193,18 @@ pub const Vendor = enum {
             else => .unknown,
         };
     }
+
+    pub fn format(self: Vendor, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt_spec;
+        _ = options;
+        switch (self) {
+            .custom => try writer.print("{s}", .{self.custom}),
+            else => try writer.print("{s}", .{@tagName(self)}),
+        }
+    }
 };
 
-pub const Os = enum {
+pub const Os = union(enum) {
     @"3ds",
     aix,
     android,
@@ -216,10 +238,13 @@ pub const Os = enum {
     unknown,
     vita,
     vxworks,
-    wasi,
+    wasip1,
+    wasip2,
     watchos,
     windows,
     xous,
+
+    custom: []const u8,
 
     pub fn fromZig(os: std.Target.Os) error{Unsupported}!Os {
         return switch (os.tag) {
@@ -242,16 +267,30 @@ pub const Os = enum {
             .watchos => .watchos,
             .hermit => .hermit,
             .hurd => .hurd,
-            .wasi => .wasi,
+            .wasi => if (os.version_range.semver.includesVersion(.{ .major = 0, .minor = 1, .patch = 0 }))
+                .wasip1
+            else if (os.version_range.semver.includesVersion(.{ .major = 0, .minor = 2, .patch = 0 }))
+                .wasip2
+            else
+                error.Unsupported,
             .emscripten => .emscripten,
             .illumos => .illumos,
             .other => .unknown,
             else => error.Unsupported,
         };
     }
+
+    pub fn format(self: Os, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt_spec;
+        _ = options;
+        switch (self) {
+            .custom => try writer.print("{s}", .{self.custom}),
+            else => try writer.print("{s}", .{@tagName(self)}),
+        }
+    }
 };
 
-pub const Env = enum {
+pub const Env = union(enum) {
     android,
     androideabi,
     eabi,
@@ -284,6 +323,8 @@ pub const Env = enum {
     spe,
     uclibceabi,
 
+    custom: []const u8,
+
     pub fn fromZig(target: std.Target) error{Unsupported}!Env {
         return switch (target.abi) {
             .none => .none,
@@ -310,6 +351,15 @@ pub const Env = enum {
             .macabi => .macabi,
             else => error.Unsupported,
         };
+    }
+
+    pub fn format(self: Env, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
+        _ = fmt_spec;
+        _ = options;
+        switch (self) {
+            .custom => try writer.print("{s}", .{self.custom}),
+            else => try writer.print("{s}", .{@tagName(self)}),
+        }
     }
 };
 
@@ -457,7 +507,7 @@ test "tier 2" {
     {
         const target = try Target.fromArchOsAbi("wasm32-wasi");
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
-        try expectEqualStrings("wasm32-wasi", target_str);
+        try expectEqualStrings("wasm32-wasip1", target_str);
     }
 }
 
@@ -479,5 +529,29 @@ test "tier 3" {
         const target = try Target.fromArchOsAbi("riscv64-linux-android");
         const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
         try expectEqualStrings("riscv64-linux-android", target_str);
+    }
+
+    // Does not work on Zig 0.13.0, the supported version range has since been updated to include WASI preview 2
+    if (Target.fromArchOsAbi("wasm32-wasi.0.2.0")) |target| {
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("wasm32-wasip2", target_str);
+    } else |_| {}
+}
+
+test "custom" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    const expectEqualStrings = std.testing.expectEqualStrings;
+
+    {
+        const target = Target{
+            .arch = .{ .custom = "arch" },
+            .vendor = .{ .custom = "vendor" },
+            .os = .{ .custom = "os" },
+            .env = .{ .custom = "env" },
+        };
+        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        try expectEqualStrings("arch-vendor-os-env", target_str);
     }
 }
