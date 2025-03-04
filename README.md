@@ -10,7 +10,7 @@ Please see `.minimum_zig_version` field of the `build.zig.zon` file.
 ## Usage
 
 ```sh
-zig fetch --save git+https://github.com/akarpovskii/build.crab#stable
+zig fetch --save git+https://github.com/akarpovskii/build.crab
 ```
 
 In `build.zig` (replace `crate` with the name of your crate):
