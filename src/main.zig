@@ -170,10 +170,16 @@ fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: 
 
     // std.Build.Cache does not support directories in the dep file.
     // Iterate over prerequisite and recursively replace any directories with the list of files inside.
+    var first_target: bool = true;
     var it: std.Build.Cache.DepTokenizer = .{ .bytes = dep_file_content };
     while (it.next()) |token| {
         switch (token) {
             .target, .target_must_resolve => {
+                if (first_target) {
+                    first_target = false;
+                } else {
+                    try writer.writeAll("\n");
+                }
                 const target_path = if (token == .target) token.target else token.target_must_resolve;
                 try writer.writeAll(target_path);
                 try writer.writeAll(":");
