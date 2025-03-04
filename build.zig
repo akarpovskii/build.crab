@@ -77,7 +77,7 @@ const CargoConfig = struct {
     cargo_args: []const []const u8 = &.{},
 
     /// Target architecture.
-    /// If null, build.zig will use gnu ABI on Windows.
+    /// By default, build.crab will use gnu ABI on Windows.
     rust_target: Target = .{ .override = .{} },
 
     pub const Target = union(enum) {
@@ -210,7 +210,7 @@ const StaticlibConfig = struct {
     cargo_args: []const []const u8 = &.{},
 
     /// Target architecture.
-    /// If null, build.zig will use gnu ABI on Windows.
+    /// By default, build.crab will use gnu ABI on Windows.
     rust_target: CargoConfig.Target = .{ .override = .{} },
 };
 
