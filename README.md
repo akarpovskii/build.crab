@@ -107,7 +107,7 @@ Otherwise, you will have to link some obscure Windows libraries even if you don'
 
 And it also makes the size of the rust library smaller.
 
-### Duplicate symbols [obsolete since Zig 0.14.0 / build.crab 0.1.8]
+### Duplicate symbols [obsolete since Zig 0.14.0 / build.crab 0.2.0]
 
 Both Rust and Zig provide `compiler_rt.lib` with most of the symbols having weak linking, but not `___chkstk` and `___chkstk_ms`.
 
