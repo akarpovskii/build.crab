@@ -48,10 +48,12 @@ pub fn linkRustLibrary(
     );
 
     const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/root.zig"),
         .name = b.fmt("test-{s}", .{folder}),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/root.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
     lib_unit_tests.linkLibCpp();
     // Link the library

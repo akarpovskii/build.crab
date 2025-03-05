@@ -8,43 +8,49 @@ pub fn build(b: *std.Build) void {
     const target = b.standardTargetOptions(.{});
     const optimize = b.standardOptimizeOption(.{});
 
-    _ = b.addModule("build_crab", .{
+    const lib = b.addModule("build_crab", .{
         .root_source_file = b.path("src/root.zig"),
         .target = target,
         .optimize = optimize,
     });
 
-    const exe = b.addExecutable(.{
+    const lib_tests = b.addTest(.{ .root_module = lib });
+    const run_lib_tests = b.addRunArtifact(lib_tests);
+
+    const test_step = b.step("test", "Run unit tests");
+    test_step.dependOn(&run_lib_tests.step);
+
+    const build_crab = b.addExecutable(.{
         .name = "build_crab",
-        .root_source_file = b.path("src/main.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/main.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
-    b.installArtifact(exe);
-
-    const run_cmd = b.addRunArtifact(exe);
-
-    run_cmd.step.dependOn(b.getInstallStep());
+    b.installArtifact(build_crab);
+    const run_build_crab = b.addRunArtifact(build_crab);
+    run_build_crab.step.dependOn(b.getInstallStep());
 
     if (b.args) |args| {
-        run_cmd.addArgs(args);
+        run_build_crab.addArgs(args);
     }
 
     const run_step = b.step("run", "Run the app");
-    run_step.dependOn(&run_cmd.step);
+    run_step.dependOn(&run_build_crab.step);
 
     const strip_symbols = b.addExecutable(.{
         .name = "strip_symbols",
-        .root_source_file = b.path("src/strip_symbols.zig"),
-        .target = target,
-        .optimize = optimize,
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/strip_symbols.zig"),
+            .target = target,
+            .optimize = optimize,
+        }),
     });
 
     b.installArtifact(strip_symbols);
-
     const run_strip_symbols = b.addRunArtifact(strip_symbols);
-
     run_strip_symbols.step.dependOn(b.getInstallStep());
 
     if (b.args) |args| {
@@ -53,17 +59,6 @@ pub fn build(b: *std.Build) void {
 
     const run_strip_symbols_step = b.step("strip", "Run the app");
     run_strip_symbols_step.dependOn(&run_strip_symbols.step);
-
-    const lib_unit_tests = b.addTest(.{
-        .root_source_file = b.path("src/root.zig"),
-        .target = target,
-        .optimize = optimize,
-    });
-
-    const run_lib_unit_tests = b.addRunArtifact(lib_unit_tests);
-
-    const test_step = b.step("test", "Run unit tests");
-    test_step.dependOn(&run_lib_unit_tests.step);
 }
 
 const CargoConfig = struct {
