@@ -81,12 +81,12 @@ const CargoConfig = struct {
     };
 
     pub const PartialTarget = struct {
-        arch: ?BuildCrab.Arch = null,
-        vendor: ?BuildCrab.Vendor = null,
-        os: ?BuildCrab.Os = null,
-        env: ?BuildCrab.Env = null,
+        arch: ?BuildCrab.rust.Arch = null,
+        vendor: ?BuildCrab.rust.Vendor = null,
+        os: ?BuildCrab.rust.Os = null,
+        env: ?BuildCrab.rust.Env = null,
 
-        pub fn override(self: PartialTarget, target: BuildCrab.Target) BuildCrab.Target {
+        pub fn override(self: PartialTarget, target: BuildCrab.rust.Target) BuildCrab.rust.Target {
             var result = target;
             inline for (@typeInfo(@TypeOf(self)).@"struct".fields) |field| {
                 const sf = @field(self, field.name);
@@ -135,7 +135,7 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Buil
             if (zig_target.os.tag == .windows) {
                 zig_target.abi = .gnu;
             }
-            var rust_target = BuildCrab.Target.fromZig(zig_target) catch @panic("unable to convert target triple to Rust");
+            var rust_target = BuildCrab.rust.Target.fromZig(zig_target) catch @panic("unable to convert target triple to Rust");
             rust_target = config.rust_target.override.override(rust_target);
             build_crab.addArg("--target");
             build_crab.addArg(b.fmt("{}", .{rust_target}));
