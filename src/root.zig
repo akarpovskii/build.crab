@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub usingnamespace @import("rust.zig");
+pub const rust = @import("rust.zig");
 
 test {
     std.testing.refAllDecls(@This());

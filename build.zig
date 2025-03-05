@@ -1,6 +1,6 @@
 const std = @import("std");
 
-pub usingnamespace @import("src/root.zig");
+pub const rust = @import("src/root.zig").rust;
 
 const BuildCrab = @This();
 
