@@ -24,11 +24,11 @@ jobs:
     runs-on: ${{ matrix.platform[0] }}
 
     steps:
-      - uses: actions/checkout@v4
-      - uses: mlugg/setup-zig@v1
+      - uses: actions/checkout@v5
+      - uses: mlugg/setup-zig@v2
         with:
-          version: 0.14.0
-      - uses: dtolnay/rust-toolchain@1.85.0
+          version: 0.15.1
+      - uses: dtolnay/rust-toolchain@1.89.0
         with:
               targets: ${{ matrix.platform[1] }}
 
