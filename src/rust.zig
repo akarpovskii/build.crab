@@ -27,17 +27,15 @@ pub const Target = struct {
         return fromQuery(query);
     }
 
-    pub fn format(self: Target, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt_spec;
-        _ = options;
+    pub fn format(self: Target, writer: *std.Io.Writer) !void {
         if (self.arch == .wasm32 and (self.os == .wasip1 or self.os == .wasip2)) {
-            try writer.print("{s}-{s}", .{ self.arch, self.os });
+            try writer.print("{f}-{f}", .{ self.arch, self.os });
         } else if (self.env == .none) {
-            try writer.print("{s}-{s}-{s}", .{ self.arch, self.vendor, self.os });
+            try writer.print("{f}-{f}-{f}", .{ self.arch, self.vendor, self.os });
         } else if (self.vendor == .unknown and (self.env == .android or self.env == .androideabi)) {
-            try writer.print("{s}-{s}-{s}", .{ self.arch, self.os, self.env });
+            try writer.print("{f}-{f}-{f}", .{ self.arch, self.os, self.env });
         } else {
-            try writer.print("{s}-{s}-{s}-{s}", .{ self.arch, self.vendor, self.os, self.env });
+            try writer.print("{f}-{f}-{f}-{f}", .{ self.arch, self.vendor, self.os, self.env });
         }
     }
 };
@@ -185,9 +183,7 @@ pub const Arch = union(enum) {
         };
     }
 
-    pub fn format(self: Arch, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt_spec;
-        _ = options;
+    pub fn format(self: Arch, writer: *std.Io.Writer) std.Io.Writer.Error!void {
         switch (self) {
             .custom => try writer.print("{s}", .{self.custom}),
             else => try writer.print("{s}", .{@tagName(self)}),
@@ -227,12 +223,10 @@ pub const Vendor = union(enum) {
         };
     }
 
-    pub fn format(self: Vendor, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt_spec;
-        _ = options;
+    pub fn format(self: Vendor, writer: *std.Io.Writer) std.Io.Writer.Error!void {
         switch (self) {
             .custom => try writer.print("{s}", .{self.custom}),
-            else => try writer.print("{s}", .{@tagName(self)}),
+            else => try writer.print("{t}", .{self}),
         }
     }
 };
@@ -319,9 +313,7 @@ pub const Os = union(enum) {
         };
     }
 
-    pub fn format(self: Os, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt_spec;
-        _ = options;
+    pub fn format(self: Os, writer: *std.Io.Writer) std.Io.Writer.Error!void {
         switch (self) {
             .custom => try writer.print("{s}", .{self.custom}),
             else => try writer.print("{s}", .{@tagName(self)}),
@@ -385,7 +377,6 @@ pub const Env = union(enum) {
             .gnuabi64 => .gnuabi64,
             .gnueabi => .gnueabi,
             .gnueabihf => .gnueabihf,
-            .gnuilp32 => .gnu_ilp32,
             .gnux32 => .gnux32,
             .eabi => .eabi,
             .eabihf => .eabihf,
@@ -403,14 +394,12 @@ pub const Env = union(enum) {
             .ohos => .ohos,
             .simulator => .sim,
 
-            // .code16, .itanium, .cygnus, .gnuabin32, .gnuf32, .gnusf, .ilp32, .muslabin32, .muslx32, .ohoseabi
+            // .code16, .itanium, .cygnus, .gnuabin32, .gnuf32, .gnusf, .gnu_ilp32, .ilp32, .muslabin32, .muslx32, .ohoseabi
             else => error.Unsupported,
         };
     }
 
-    pub fn format(self: Env, comptime fmt_spec: []const u8, options: std.fmt.FormatOptions, writer: anytype) !void {
-        _ = fmt_spec;
-        _ = options;
+    pub fn format(self: Env, writer: *std.Io.Writer) std.Io.Writer.Error!void {
         switch (self) {
             .custom => try writer.print("{s}", .{self.custom}),
             else => try writer.print("{s}", .{@tagName(self)}),
@@ -428,43 +417,43 @@ test "tier 1" {
 
     {
         const target = try Target.fromArchOsAbi("aarch64-macos");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("aarch64-apple-darwin", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("aarch64-linux-gnu");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("aarch64-unknown-linux-gnu", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("x86_64-macos");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("x86_64-apple-darwin", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("x86_64-linux-gnu");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("x86_64-unknown-linux-gnu", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("x86-windows-gnu");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("i686-pc-windows-gnu", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("x86-linux-gnu");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("i686-unknown-linux-gnu", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("x86_64-windows-gnu");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("x86_64-pc-windows-gnu", target_str);
     }
 }
@@ -479,25 +468,25 @@ test "tier 2" {
 
     {
         const target = try Target.fromArchOsAbi("aarch64-windows-msvc");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("aarch64-pc-windows-msvc", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("aarch64-linux-musl");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("aarch64-unknown-linux-musl", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("arm-linux-gnueabi");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("arm-unknown-linux-gnueabi", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("arm-linux-gnueabihf");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("arm-unknown-linux-gnueabihf", target_str);
     }
 
@@ -505,31 +494,31 @@ test "tier 2" {
 
     {
         const target = try Target.fromArchOsAbi("loongarch64-linux-gnu");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("loongarch64-unknown-linux-gnu", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("loongarch64-linux-musl");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("loongarch64-unknown-linux-musl", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("powerpc-linux-gnu");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("powerpc-unknown-linux-gnu", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("powerpc64-linux-gnu");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("powerpc64-unknown-linux-gnu", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("powerpc64le-linux-gnu");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("powerpc64le-unknown-linux-gnu", target_str);
     }
 
@@ -539,7 +528,7 @@ test "tier 2" {
             .cpu_features = "baseline+i-m-a-f-c",
             .object_format = "elf",
         }));
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("riscv32i-unknown-none-elf", target_str);
     }
 
@@ -549,7 +538,7 @@ test "tier 2" {
             .cpu_features = "baseline+i+m-a-f-c",
             .object_format = "elf",
         }));
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("riscv32im-unknown-none-elf", target_str);
     }
 
@@ -559,7 +548,7 @@ test "tier 2" {
             .cpu_features = "baseline+i+m+a-f-c",
             .object_format = "elf",
         }));
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("riscv32ima-unknown-none-elf", target_str);
     }
 
@@ -569,7 +558,7 @@ test "tier 2" {
             .cpu_features = "baseline+i+m-a-f+c",
             .object_format = "elf",
         }));
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("riscv32imc-unknown-none-elf", target_str);
     }
 
@@ -579,7 +568,7 @@ test "tier 2" {
             .cpu_features = "baseline+i+m+a-f+c",
             .object_format = "elf",
         }));
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("riscv32imac-unknown-none-elf", target_str);
     }
 
@@ -589,13 +578,13 @@ test "tier 2" {
             .cpu_features = "baseline+i+m+a+f+c",
             .object_format = "elf",
         }));
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("riscv32imafc-unknown-none-elf", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("riscv64-linux-gnu");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("riscv64gc-unknown-linux-gnu", target_str);
     }
 
@@ -603,25 +592,25 @@ test "tier 2" {
 
     {
         const target = try Target.fromArchOsAbi("aarch64-linux-android");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("aarch64-linux-android", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("arm-linux-android");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("arm-linux-androideabi", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("x86-linux-android");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("i686-linux-android", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("wasm32-wasi");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("wasm32-wasip1", target_str);
     }
 }
@@ -636,21 +625,21 @@ test "tier 3" {
 
     {
         const target = try Target.fromArchOsAbi("riscv64-linux-musl");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("riscv64gc-unknown-linux-musl", target_str);
     }
 
     {
         const target = try Target.fromArchOsAbi("riscv64-linux-android");
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("riscv64-linux-android", target_str);
     }
 
-    // Does not work on Zig 0.13.0, the supported version range has since been updated to include WASI preview 2
-    if (Target.fromArchOsAbi("wasm32-wasi.0.2.0")) |target| {
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+    {
+        const target = try Target.fromArchOsAbi("wasm32-wasi.0.2.0");
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("wasm32-wasip2", target_str);
-    } else |_| {}
+    }
 }
 
 test "custom" {
@@ -666,7 +655,7 @@ test "custom" {
             .os = .{ .custom = "os" },
             .env = .{ .custom = "env" },
         };
-        const target_str = try std.fmt.allocPrint(allocator, "{}", .{target});
+        const target_str = try std.fmt.allocPrint(allocator, "{f}", .{target});
         try expectEqualStrings("arch-vendor-os-env", target_str);
     }
 }
