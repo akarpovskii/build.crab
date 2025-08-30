@@ -138,7 +138,7 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Buil
             var rust_target = BuildCrab.rust.Target.fromZig(zig_target) catch @panic("unable to convert target triple to Rust");
             rust_target = config.rust_target.override.override(rust_target);
             build_crab.addArg("--target");
-            build_crab.addArg(b.fmt("{}", .{rust_target}));
+            build_crab.addArg(b.fmt("{f}", .{rust_target}));
         },
     }
 
@@ -252,11 +252,11 @@ fn overrideTargetUserInput(args: anytype) @TypeOf(args) {
         const T = field.type;
         switch (T) {
             std.Target.Query => {
-                v.* = std.Target.Query.fromTarget(host_target);
+                v.* = std.Target.Query.fromTarget(&host_target);
             },
             std.Build.ResolvedTarget => {
                 v.* = .{
-                    .query = std.Target.Query.fromTarget(host_target),
+                    .query = std.Target.Query.fromTarget(&host_target),
                     .result = host_target,
                 };
             },

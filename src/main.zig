@@ -1,7 +1,9 @@
 const std = @import("std");
 
 fn printUsage() !void {
-    try std.io.getStdOut().writeAll(
+    var stdout_writer = std.fs.File.stdout().writer(&.{});
+    const stdout = &stdout_writer.interface;
+    try stdout.writeAll(
         "Usage: build_crab " ++
             "--manifest-path <path/to/Cargo.toml> " ++
             "--target-dir <directory> " ++
@@ -32,8 +34,8 @@ pub fn main() !void {
     var deps_file: ?[]const u8 = null;
     var target_dir: ?[]const u8 = null;
     var manifest_path: ?[]const u8 = null;
-    var cargo_args = std.ArrayList([]const u8).init(allocator);
-    defer cargo_args.deinit();
+    var cargo_args: std.ArrayList([]const u8) = .empty;
+    defer cargo_args.deinit(allocator);
 
     _ = args.next();
     while (args.next()) |arg| {
@@ -51,7 +53,7 @@ pub fn main() !void {
         }
         if (std.mem.eql(u8, arg, "--")) {
             while (args.next()) |cargo_arg| {
-                try cargo_args.append(cargo_arg);
+                try cargo_args.append(allocator, cargo_arg);
             }
             break;
         }
@@ -61,30 +63,30 @@ pub fn main() !void {
     std.log.debug("target-dir = {?s}", .{target_dir});
     std.log.debug("manifest-path = {?s}", .{manifest_path});
     std.log.debug("deps = {?s}", .{deps_file});
-    std.log.debug("cargo args = {}", .{std.json.fmt(cargo_args.items, .{})});
+    std.log.debug("cargo args = {f}", .{std.json.fmt(cargo_args.items, .{})});
 
     if (target_dir == null or manifest_path == null) {
         try printUsage();
         return;
     }
 
-    var cargo_cmd = std.ArrayList([]const u8).init(allocator);
-    defer cargo_cmd.deinit();
-    try cargo_cmd.append("cargo");
-    try cargo_cmd.append(command orelse "build");
-    try cargo_cmd.append("--message-format=json-render-diagnostics");
-    try cargo_cmd.append("--target-dir");
-    try cargo_cmd.append(target_dir.?);
-    try cargo_cmd.append("--manifest-path");
-    try cargo_cmd.append(manifest_path.?);
+    var cargo_cmd: std.ArrayList([]const u8) = .empty;
+    defer cargo_cmd.deinit(allocator);
+    try cargo_cmd.append(allocator, "cargo");
+    try cargo_cmd.append(allocator, command orelse "build");
+    try cargo_cmd.append(allocator, "--message-format=json-render-diagnostics");
+    try cargo_cmd.append(allocator, "--target-dir");
+    try cargo_cmd.append(allocator, target_dir.?);
+    try cargo_cmd.append(allocator, "--manifest-path");
+    try cargo_cmd.append(allocator, manifest_path.?);
     for (cargo_args.items) |arg| {
         if (std.mem.containsAtLeast(u8, arg, 1, "--message-format")) {
             continue;
         }
-        try cargo_cmd.append(arg);
+        try cargo_cmd.append(allocator, arg);
     }
 
-    std.log.debug("about to execute {}", .{std.json.fmt(cargo_cmd.items, .{})});
+    std.log.debug("about to execute {f}", .{std.json.fmt(cargo_cmd.items, .{})});
     const cargo_result = try std.process.Child.run(.{
         .allocator = allocator,
         .argv = cargo_cmd.items,
@@ -96,7 +98,9 @@ pub fn main() !void {
         allocator.free(cargo_result.stderr);
     }
 
-    try std.io.getStdErr().writeAll(cargo_result.stderr);
+    var stderr_writer = std.fs.File.stderr().writer(&.{});
+    const stderr = &stderr_writer.interface;
+    try stderr.writeAll(cargo_result.stderr);
     std.log.debug("cargo exit status {any}", .{cargo_result.term});
     switch (cargo_result.term) {
         .Exited => |exit_code| if (exit_code != 0) std.process.exit(1),
@@ -159,12 +163,13 @@ pub fn main() !void {
             const stat = try dst.stat();
             try dst.seekTo(stat.size);
 
-            try write_dep_file(allocator, cwd, artifact_d, dst.writer().any());
+            var dst_writer = dst.writer(&.{});
+            try write_dep_file(allocator, cwd, artifact_d, &dst_writer.interface);
         }
     }
 }
 
-fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: []const u8, writer: std.io.AnyWriter) !void {
+fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: []const u8, writer: *std.Io.Writer) !void {
     const dep_file_content = try cwd.readFileAlloc(allocator, dep_file_path, 100 * 1024 * 1024);
     defer allocator.free(dep_file_content);
 
@@ -185,13 +190,13 @@ fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: 
                 try writer.writeAll(":");
             },
             .prereq, .prereq_must_resolve => {
-                var resolve_buf = std.ArrayList(u8).init(allocator);
-                defer resolve_buf.deinit();
+                var resolve_buf: std.ArrayList(u8) = .empty;
+                defer resolve_buf.deinit(allocator);
 
                 const prereq_path = switch (token) {
                     .prereq => token.prereq,
                     .prereq_must_resolve => resolved: {
-                        try token.resolve(resolve_buf.writer());
+                        try token.resolve(allocator, &resolve_buf);
                         break :resolved resolve_buf.items;
                     },
                     else => unreachable,
@@ -214,9 +219,9 @@ fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: 
                 }
             },
             else => |err| {
-                var error_buf = std.ArrayList(u8).init(allocator);
-                defer error_buf.deinit();
-                try err.printError(error_buf.writer());
+                var error_buf: std.ArrayList(u8) = .empty;
+                defer error_buf.deinit(allocator);
+                try err.printError(allocator, &error_buf);
                 @panic(try std.fmt.allocPrint(allocator, "failed parsing {s}: {s}", .{ dep_file_path, error_buf.items }));
             },
         }
@@ -224,9 +229,9 @@ fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: 
     try writer.writeAll("\n");
 }
 
-fn walk_dep_directory(allocator: std.mem.Allocator, root: std.fs.Dir, dep_writer: std.io.AnyWriter) !void {
-    var stack = std.ArrayList(std.fs.Dir).init(allocator);
-    try stack.append(root);
+fn walk_dep_directory(allocator: std.mem.Allocator, root: std.fs.Dir, dep_writer: *std.Io.Writer) !void {
+    var stack: std.ArrayList(std.fs.Dir) = .empty;
+    try stack.append(allocator, root);
 
     while (stack.items.len > 0) {
         const directory: std.fs.Dir = stack.pop().?;
@@ -234,7 +239,7 @@ fn walk_dep_directory(allocator: std.mem.Allocator, root: std.fs.Dir, dep_writer
         while (try it.next()) |entry| {
             switch (entry.kind) {
                 .directory => {
-                    try stack.append(try directory.openDir(entry.name, .{
+                    try stack.append(allocator, try directory.openDir(entry.name, .{
                         .iterate = true,
                         .no_follow = true, // TODO: Symlinks?
                     }));
@@ -257,7 +262,7 @@ fn walk_dep_directory(allocator: std.mem.Allocator, root: std.fs.Dir, dep_writer
     return;
 }
 
-fn render_filename(token: []const u8, writer: std.io.AnyWriter) !void {
+fn render_filename(token: []const u8, writer: *std.Io.Writer) !void {
     for (token) |c| {
         switch (c) {
             ' ' => try writer.writeByte('\\'),
