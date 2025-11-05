@@ -105,8 +105,12 @@ pub fn main() !void {
         return error.ArError;
     }
 
+    var threaded: std.Io.Threaded = .init(allocator);
+    defer threaded.deinit();
+    const io = threaded.io();
+
     const files_to_keep = switch (format_enum) {
-        .coff => try filterObjFilesWindows(allocator, temp_dir, remove_symbol.items),
+        .coff => try filterObjFilesWindows(allocator, io, temp_dir, remove_symbol.items),
         .elf, .macho => unreachable,
     };
 
@@ -132,8 +136,8 @@ fn doNothing(input: []const u8, output: []const u8) !void {
     try cwd.copyFile(input, cwd, output, .{});
 }
 
-fn filterObjFilesWindows(allocator: std.mem.Allocator, temp_dir: []const u8, remove_symbols: [][]const u8) ![][]const u8 {
-    var tdir = try std.fs.cwd().openDir(temp_dir, .{ .iterate = true, .no_follow = true });
+fn filterObjFilesWindows(allocator: std.mem.Allocator, io: std.Io, temp_dir: []const u8, remove_symbols: [][]const u8) ![][]const u8 {
+    var tdir = try std.fs.cwd().openDir(temp_dir, .{ .iterate = true, .follow_symlinks = false });
     defer tdir.close();
 
     var walker = try tdir.walk(allocator);
@@ -159,7 +163,8 @@ fn filterObjFilesWindows(allocator: std.mem.Allocator, temp_dir: []const u8, rem
         var file = try tdir.openFile(entry.path, .{});
         defer file.close();
 
-        const data = try file.readToEndAlloc(allocator, 50 * 1024 * 1024);
+        var reader = file.reader(io, &.{});
+        const data = try reader.interface.allocRemaining(allocator, .unlimited);
         defer allocator.free(data);
 
         const coff = std.coff.Coff.init(data, false) catch std.coff.Coff{

@@ -170,7 +170,7 @@ pub fn main() !void {
 }
 
 fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: []const u8, writer: *std.Io.Writer) !void {
-    const dep_file_content = try cwd.readFileAlloc(allocator, dep_file_path, 100 * 1024 * 1024);
+    const dep_file_content = try cwd.readFileAlloc(dep_file_path, allocator, .unlimited);
     defer allocator.free(dep_file_content);
 
     // std.Build.Cache does not support directories in the dep file.
@@ -212,7 +212,7 @@ fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: 
                     .directory => {
                         try walk_dep_directory(allocator, try cwd.openDir(prereq_path, .{
                             .iterate = true,
-                            .no_follow = true, // TODO: Symlinks?
+                            .follow_symlinks = false, // TODO: Symlinks?
                         }), writer);
                     },
                     else => {},
@@ -241,7 +241,7 @@ fn walk_dep_directory(allocator: std.mem.Allocator, root: std.fs.Dir, dep_writer
                 .directory => {
                     try stack.append(allocator, try directory.openDir(entry.name, .{
                         .iterate = true,
-                        .no_follow = true, // TODO: Symlinks?
+                        .follow_symlinks = false, // TODO: Symlinks?
                     }));
                 },
                 // TODO: Symlinks?
