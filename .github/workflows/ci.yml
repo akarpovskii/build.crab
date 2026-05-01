@@ -27,8 +27,8 @@ jobs:
       - uses: actions/checkout@v5
       - uses: mlugg/setup-zig@v2
         with:
-          version: 0.15.1
-      - uses: dtolnay/rust-toolchain@1.89.0
+          version: 0.16.0
+      - uses: dtolnay/rust-toolchain@1.94.1
         with:
               targets: ${{ matrix.platform[1] }}
 

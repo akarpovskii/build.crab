@@ -1,7 +1,7 @@
 const std = @import("std");
 
-fn printUsage() !void {
-    var stdout_writer = std.fs.File.stdout().writer(&.{});
+fn printUsage(io: std.Io) !void {
+    var stdout_writer = std.Io.File.stdout().writer(io, &.{});
     const stdout = &stdout_writer.interface;
     try stdout.writeAll(
         "Usage: build_crab " ++
@@ -24,12 +24,10 @@ const CargoTarget = struct {
     kind: [][]const u8,
 };
 
-pub fn main() !void {
-    var arena = std.heap.ArenaAllocator.init(std.heap.page_allocator);
-    defer arena.deinit();
-    const allocator = arena.allocator();
+pub fn main(init: std.process.Init) !void {
+    const io = init.io;
+    const allocator = init.gpa;
 
-    var args = try std.process.argsWithAllocator(allocator);
     var command: ?[]const u8 = null;
     var deps_file: ?[]const u8 = null;
     var target_dir: ?[]const u8 = null;
@@ -37,6 +35,8 @@ pub fn main() !void {
     var cargo_args: std.ArrayList([]const u8) = .empty;
     defer cargo_args.deinit(allocator);
 
+    var args = try init.minimal.args.iterateAllocator(allocator);
+    defer args.deinit();
     _ = args.next();
     while (args.next()) |arg| {
         if (std.mem.eql(u8, arg, "--command")) {
@@ -66,7 +66,7 @@ pub fn main() !void {
     std.log.debug("cargo args = {f}", .{std.json.fmt(cargo_args.items, .{})});
 
     if (target_dir == null or manifest_path == null) {
-        try printUsage();
+        try printUsage(io);
         return;
     }
 
@@ -87,30 +87,29 @@ pub fn main() !void {
     }
 
     std.log.debug("about to execute {f}", .{std.json.fmt(cargo_cmd.items, .{})});
-    const cargo_result = try std.process.Child.run(.{
-        .allocator = allocator,
+    const cargo_result = try std.process.run(allocator, io, .{
         .argv = cargo_cmd.items,
-        // TODO: Dump output to a file
-        .max_output_bytes = 50 * 1024 * 1024,
     });
     defer {
         allocator.free(cargo_result.stdout);
         allocator.free(cargo_result.stderr);
     }
 
-    var stderr_writer = std.fs.File.stderr().writer(&.{});
+    var stderr_writer = std.Io.File.stderr().writer(io, &.{});
     const stderr = &stderr_writer.interface;
     try stderr.writeAll(cargo_result.stderr);
     std.log.debug("cargo exit status {any}", .{cargo_result.term});
     switch (cargo_result.term) {
-        .Exited => |exit_code| if (exit_code != 0) std.process.exit(1),
+        .exited => |exit_code| if (exit_code != 0) std.process.exit(1),
         else => std.process.exit(1),
     }
 
     var lines = std.mem.tokenizeScalar(u8, cargo_result.stdout, '\n');
     outer: while (lines.next()) |line| {
         std.log.debug("parsing cargo output: {s}", .{line});
-        const message = try std.json.parseFromSliceLeaky(CargoMessage, allocator, line, .{ .ignore_unknown_fields = true });
+        const parsed_message = try std.json.parseFromSlice(CargoMessage, allocator, line, .{ .ignore_unknown_fields = true });
+        defer parsed_message.deinit();
+        const message = parsed_message.value;
         if (!std.mem.eql(u8, message.reason, "compiler-artifact")) {
             std.log.debug("not a compiler-artifact, ignored", .{});
             continue;
@@ -135,12 +134,12 @@ pub fn main() !void {
             @panic(try std.fmt.allocPrint(allocator, "no filenames provided by Cargo", .{}));
         }
 
-        const cwd = std.fs.cwd();
-        const dst_dir = try cwd.openDir(target_dir.?, .{});
+        const cwd = std.Io.Dir.cwd();
+        const dst_dir = try cwd.openDir(io, target_dir.?, .{});
         for (filenames) |artifact| {
             const basename = std.fs.path.basename(artifact);
             std.log.debug("About to copy '{s}' to '{s}/{s}'", .{ artifact, target_dir.?, basename });
-            try std.fs.Dir.copyFile(cwd, artifact, dst_dir, basename, .{});
+            try std.Io.Dir.copyFile(cwd, artifact, dst_dir, basename, io, .{});
         }
 
         if (deps_file) |deps_path| {
@@ -155,22 +154,22 @@ pub fn main() !void {
 
             std.log.debug("About to copy '{s}' to '{s}'", .{ artifact_d, deps_path });
 
-            const dst = cwd.openFile(deps_path, .{ .mode = .read_write }) catch |e| switch (e) {
-                error.FileNotFound => try cwd.createFile(deps_path, .{ .read = true }),
+            const dst = cwd.openFile(io, deps_path, .{ .mode = .read_write }) catch |e| switch (e) {
+                error.FileNotFound => try cwd.createFile(io, deps_path, .{ .read = true }),
                 else => return e,
             };
-            defer dst.close();
-            const stat = try dst.stat();
-            try dst.seekTo(stat.size);
+            defer dst.close(io);
+            const stat = try dst.stat(io);
 
-            var dst_writer = dst.writer(&.{});
-            try write_dep_file(allocator, cwd, artifact_d, &dst_writer.interface);
+            var dst_writer = dst.writer(io, &.{});
+            try dst_writer.seekTo(stat.size);
+            try write_dep_file(allocator, io, cwd, artifact_d, &dst_writer.interface);
         }
     }
 }
 
-fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: []const u8, writer: *std.Io.Writer) !void {
-    const dep_file_content = try cwd.readFileAlloc(allocator, dep_file_path, 100 * 1024 * 1024);
+fn write_dep_file(allocator: std.mem.Allocator, io: std.Io, cwd: std.Io.Dir, dep_file_path: []const u8, writer: *std.Io.Writer) !void {
+    const dep_file_content = try cwd.readFileAlloc(io, dep_file_path, allocator, .unlimited);
     defer allocator.free(dep_file_content);
 
     // std.Build.Cache does not support directories in the dep file.
@@ -202,7 +201,7 @@ fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: 
                     else => unreachable,
                 };
 
-                const fstat = try cwd.statFile(prereq_path);
+                const fstat = try cwd.statFile(io, prereq_path, .{});
                 switch (fstat.kind) {
                     // TODO: Symlinks?
                     .file => {
@@ -210,9 +209,9 @@ fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: 
                         try writer.writeAll(prereq_path);
                     },
                     .directory => {
-                        try walk_dep_directory(allocator, try cwd.openDir(prereq_path, .{
+                        try walk_dep_directory(allocator, io, try cwd.openDir(io, prereq_path, .{
                             .iterate = true,
-                            .no_follow = true, // TODO: Symlinks?
+                            .follow_symlinks = false, // TODO: Symlinks?
                         }), writer);
                     },
                     else => {},
@@ -229,30 +228,30 @@ fn write_dep_file(allocator: std.mem.Allocator, cwd: std.fs.Dir, dep_file_path: 
     try writer.writeAll("\n");
 }
 
-fn walk_dep_directory(allocator: std.mem.Allocator, root: std.fs.Dir, dep_writer: *std.Io.Writer) !void {
-    var stack: std.ArrayList(std.fs.Dir) = .empty;
+fn walk_dep_directory(allocator: std.mem.Allocator, io: std.Io, root: std.Io.Dir, dep_writer: *std.Io.Writer) !void {
+    var stack: std.ArrayList(std.Io.Dir) = .empty;
     try stack.append(allocator, root);
 
     while (stack.items.len > 0) {
-        const directory: std.fs.Dir = stack.pop().?;
+        const directory: std.Io.Dir = stack.pop().?;
         var it = directory.iterate();
-        while (try it.next()) |entry| {
+        while (try it.next(io)) |entry| {
             switch (entry.kind) {
                 .directory => {
-                    try stack.append(allocator, try directory.openDir(entry.name, .{
+                    try stack.append(allocator, try directory.openDir(io, entry.name, .{
                         .iterate = true,
-                        .no_follow = true, // TODO: Symlinks?
+                        .follow_symlinks = false, // TODO: Symlinks?
                     }));
                 },
                 // TODO: Symlinks?
                 .file => {
                     try dep_writer.writeAll(" ");
-                    const full_path = try directory.realpathAlloc(allocator, entry.name);
+                    const full_path = try directory.realPathFileAlloc(io, entry.name, allocator);
                     defer allocator.free(full_path);
                     try render_filename(full_path, dep_writer);
                 },
                 else => {
-                    const full_path = try directory.realpathAlloc(allocator, entry.name);
+                    const full_path = try directory.realPathFileAlloc(io, entry.name, allocator);
                     defer allocator.free(full_path);
                     std.log.debug("Dep file: ignored {s} (not a file)", .{full_path});
                 },

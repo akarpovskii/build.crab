@@ -106,26 +106,3 @@ lto = true
 Otherwise, you will have to link some obscure Windows libraries even if you don't use them.
 
 And it also makes the size of the rust library smaller.
-
-### Duplicate symbols [obsolete since Zig 0.14.0 / build.crab 0.2.0]
-
-Both Rust and Zig provide `compiler_rt.lib` with most of the symbols having weak linking, but not `___chkstk` and `___chkstk_ms`.
-
-So if you want to link against a Rust library that needs these intrinsics, you should somehow resolve the conflict (though I'm not completely sure that it is safe to do).
-
-For this purpose, `build.crab` provides an additional artifact called `strip_symbols` that repacks `.a` archive removing `.o` files containing conflicting functions (provided by the user).
-
-```zig
-const crate_lib_path = @import("build_crab").addStripSymbols(b, .{
-    .name = "libcrate.a",
-    .archive = b.path("path/to/libcrate.a"),
-    .symbols = &.{
-        "___chkstk_ms",
-    },
-});
-
-module.addLibraryPath(crate_lib_path.dirname());
-module.linkSystemLibrary("crate", .{});
-```
-
-If you use `addRustStaticlib`, this is already taken care of for you. See the [`buid.zig`](./example/build.zig) for a complete example.
