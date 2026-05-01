@@ -53,11 +53,11 @@ pub fn linkRustLibrary(
             .root_source_file = b.path("src/root.zig"),
             .target = target,
             .optimize = optimize,
+            .link_libcpp = true,
         }),
     });
-    lib_unit_tests.linkLibCpp();
     // Link the library
-    lib_unit_tests.addLibraryPath(crate_artifacts);
+    lib_unit_tests.root_module.addLibraryPath(crate_artifacts);
     lib_unit_tests.root_module.linkSystemLibrary("crate", .{ .preferred_link_mode = .static });
 
     b.installArtifact(lib_unit_tests);

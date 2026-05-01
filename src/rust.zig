@@ -388,7 +388,6 @@ pub const Env = union(enum) {
             .musleabi => .musleabi,
             .musleabihf => .musleabihf,
             .msvc => .msvc,
-            .macabi => .macabi,
             .ohos => .ohos,
             .simulator => .sim,
 
