@@ -88,7 +88,7 @@ const CargoConfig = struct {
 /// Use `args.optimize` to set the optimization level of `build_crab` binaries.
 pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Build.LazyPath {
     const dep_args = overrideTargetUserInput(args);
-    const build_crab_dep = b.dependency("build_crab", dep_args);
+    const build_crab_dep = b.dependencyFromBuildZig(@This(), dep_args);
     const build_crab = b.addRunArtifact(build_crab_dep.artifact("build_crab"));
 
     build_crab.addArg("--command");
