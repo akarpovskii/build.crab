@@ -87,9 +87,15 @@ pub fn main(init: std.process.Init) !void {
     }
 
     std.log.debug("about to execute {f}", .{std.json.fmt(cargo_cmd.items, .{})});
-    const cargo_result = try std.process.run(allocator, io, .{
+    const cargo_result = std.process.run(allocator, io, .{
         .argv = cargo_cmd.items,
-    });
+    }) catch |err| switch (err) {
+        error.FileNotFound => {
+            std.log.err("cargo is not installed", .{});
+            return err;
+        },
+        else => return err,
+    };
     defer {
         allocator.free(cargo_result.stdout);
         allocator.free(cargo_result.stderr);
