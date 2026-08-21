@@ -9,6 +9,7 @@ fn printUsage(io: std.Io) !void {
             "--target-dir <directory> " ++
             "[--deps <.d file path>] " ++
             "[--command <build (default) / rustc / zigbuild etc>] " ++
+            "[--zig-toolchain <zig target> <path to C/C++ compiler toolchain>] " ++
             "[-- <cargo <command> args>]\n",
     );
 }
@@ -29,6 +30,9 @@ pub fn main(init: std.process.Init) !void {
     const allocator = init.gpa;
 
     var command: ?[]const u8 = null;
+    var rust_target: ?[]const u8 = null;
+    var zig_target: ?[]const u8 = null;
+    var zig_toolchain: ?[]const u8 = null;
     var deps_file: ?[]const u8 = null;
     var target_dir: ?[]const u8 = null;
     var manifest_path: ?[]const u8 = null;
@@ -42,6 +46,10 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.eql(u8, arg, "--command")) {
             command = args.next() orelse break;
         }
+        if (std.mem.eql(u8, arg, "--zig-toolchain")) {
+            zig_target = args.next() orelse break;
+            zig_toolchain = args.next() orelse break;
+        }
         if (std.mem.eql(u8, arg, "--target-dir")) {
             target_dir = args.next() orelse break;
         }
@@ -54,12 +62,18 @@ pub fn main(init: std.process.Init) !void {
         if (std.mem.eql(u8, arg, "--")) {
             while (args.next()) |cargo_arg| {
                 try cargo_args.append(allocator, cargo_arg);
+                if (std.mem.eql(u8, cargo_arg, "--target")) {
+                    rust_target = args.next() orelse break;
+                    try cargo_args.append(allocator, rust_target.?);
+                }
             }
             break;
         }
     }
 
     std.log.debug("Received:", .{});
+    std.log.debug("rust-target = {?s}", .{rust_target});
+    std.log.debug("zig-toolchain = {?s} {?s}", .{ zig_target, zig_toolchain });
     std.log.debug("target-dir = {?s}", .{target_dir});
     std.log.debug("manifest-path = {?s}", .{manifest_path});
     std.log.debug("deps = {?s}", .{deps_file});
@@ -86,9 +100,31 @@ pub fn main(init: std.process.Init) !void {
         try cargo_cmd.append(allocator, arg);
     }
 
+    var allocating: std.Io.Writer.Allocating = .init(init.arena.allocator());
+    defer allocating.deinit();
+    var env = init.environ_map;
+    if (zig_toolchain) |toolchain_path| {
+        try allocating.writer.writeAll(toolchain_path);
+        if (env.get("PATH")) |path| {
+            try allocating.writer.writeByte(':');
+            try allocating.writer.writeAll(path);
+        }
+        try env.put("PATH", try allocating.toOwnedSlice());
+        if (rust_target) |cargo_target| {
+            try allocating.writer.writeAll("CARGO_TARGET_");
+            for (cargo_target) |c| switch (c) {
+                '-' => try allocating.writer.writeByte('_'),
+                else => try allocating.writer.writeByte(std.ascii.toUpper(c)),
+            };
+            try allocating.writer.writeAll("_LINKER");
+            try env.put(try allocating.toOwnedSlice(), try std.fmt.allocPrint(init.arena.allocator(), "{s}-cc", .{zig_target.?}));
+        }
+    }
+
     std.log.debug("about to execute {f}", .{std.json.fmt(cargo_cmd.items, .{})});
     const cargo_result = std.process.run(allocator, io, .{
         .argv = cargo_cmd.items,
+        .environ_map = env,
     }) catch |err| switch (err) {
         error.FileNotFound => {
             std.log.err("cargo is not installed", .{});

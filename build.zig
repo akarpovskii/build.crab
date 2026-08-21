@@ -39,6 +39,21 @@ pub fn build(b: *std.Build) void {
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_build_crab.step);
+
+    const opts = b.addOptions();
+    opts.addOption([]const u8, "zig", b.graph.zig_exe);
+    const cc = b.addExecutable(.{
+        .name = "cc",
+        .root_module = b.createModule(.{
+            .root_source_file = b.path("src/cc.zig"),
+            .target = target,
+            .optimize = optimize,
+            .imports = &.{
+                .{ .name = "build_options", .module = opts.createModule() },
+            },
+        }),
+    });
+    b.installArtifact(cc);
 }
 
 const CargoConfig = struct {
@@ -54,6 +69,9 @@ const CargoConfig = struct {
     /// Target architecture.
     /// By default, build.crab will use gnu ABI on Windows.
     rust_target: Target = .{ .override = .{} },
+
+    // Use zig itself as a cross-compiler toolchain for cargo/rust
+    use_zig_as_toolchain: bool = true,
 
     pub const Target = union(enum) {
         value: []const u8,
@@ -90,9 +108,54 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Buil
     const dep_args = overrideTargetUserInput(args);
     const build_crab_dep = b.dependencyFromBuildZig(@This(), dep_args);
     const build_crab = b.addRunArtifact(build_crab_dep.artifact("build_crab"));
+    const cc = build_crab_dep.artifact("cc");
+
+    const zig_target = D: {
+        var zig_target = targetFromUserInputOptions(args);
+        if (zig_target.os.tag == .windows) {
+            zig_target.abi = .gnu;
+        }
+        break :D zig_target;
+    };
+
+    const rust_target = switch (config.rust_target) {
+        .value => |value| value,
+        .override => |value| D: {
+            const rust_target = BuildCrab.rust.Target.fromZig(zig_target) catch @panic("unable to convert target triple to Rust");
+            break :D b.fmt("{f}", .{value.override(rust_target)});
+        },
+    };
+
+    const zig_triple = zig_target.zigTriple(b.allocator) catch @panic("OOM");
+    const toolchain = b.addWriteFiles();
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), "cc");
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), "gcc");
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), "clang");
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), "ar");
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), "ranlib");
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), "dlltool");
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), b.fmt("{s}-cc", .{zig_triple}));
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), b.fmt("{s}-gcc", .{zig_triple}));
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), b.fmt("{s}-clang", .{zig_triple}));
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), b.fmt("{s}-ar", .{zig_triple}));
+    _ = toolchain.addCopyFile(cc.getEmittedBin(), b.fmt("{s}-ranlib", .{zig_triple}));
+
+    if (zig_target.os.tag == .windows) {
+        switch (zig_target.ptrBitWidth()) {
+            32 => _ = toolchain.addCopyFile(cc.getEmittedBin(), b.fmt("{t}-mingw32-dlltool", .{zig_target.cpu.arch})),
+            64 => _ = toolchain.addCopyFile(cc.getEmittedBin(), b.fmt("{t}-w64-mingw32-dlltool", .{zig_target.cpu.arch})),
+            else => @panic("unknown windows target"),
+        }
+    }
 
     build_crab.addArg("--command");
     build_crab.addArg(config.command);
+
+    if (config.use_zig_as_toolchain) {
+        build_crab.addArg("--zig-toolchain");
+        build_crab.addArg(zig_triple);
+        build_crab.addDirectoryArg(toolchain.getDirectory());
+    }
 
     build_crab.addArg("--deps");
     _ = build_crab.addDepFileOutputArg("depinfo.d");
@@ -105,23 +168,8 @@ pub fn addCargoBuild(b: *std.Build, config: CargoConfig, args: anytype) std.Buil
 
     build_crab.addArg("--");
 
-    switch (config.rust_target) {
-        .value => {
-            build_crab.addArg("--target");
-            build_crab.addArg(config.rust_target.value);
-        },
-        .override => {
-            var zig_target = targetFromUserInputOptions(args);
-            if (zig_target.os.tag == .windows) {
-                zig_target.abi = .gnu;
-            }
-            var rust_target = BuildCrab.rust.Target.fromZig(zig_target) catch @panic("unable to convert target triple to Rust");
-            rust_target = config.rust_target.override.override(rust_target);
-            build_crab.addArg("--target");
-            build_crab.addArg(b.fmt("{f}", .{rust_target}));
-        },
-    }
-
+    build_crab.addArg("--target");
+    build_crab.addArg(rust_target);
     build_crab.addArgs(config.cargo_args);
 
     return target_dir;
