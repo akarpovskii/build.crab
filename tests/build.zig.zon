@@ -1,0 +1,18 @@
+.{
+    .name = .tests,
+    .version = "0.0.0",
+    .fingerprint = 0x1260fc5e5b170b5c,
+
+    .dependencies = .{
+        .build_crab = .{
+            .path = "../",
+        },
+        .zigbuild = .{
+            .url = "git+https://github.com/rust-cross/cargo-zigbuild.git#cd38ab2c56dfb70bc7459dd007d8cc5d8aec94ad",
+            .hash = "N-V-__8AAPDvBgCl6usLjcu9erAV63uW-6J-f8uClaZo_VJ4",
+        },
+    },
+    .paths = .{
+        "",
+    },
+}

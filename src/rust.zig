@@ -385,7 +385,10 @@ pub const Env = union(enum) {
             .androideabi => .androideabi,
             .musl => .musl,
             .muslabi64 => .muslabi64,
-            .musleabi => .musleabi,
+            .musleabi => switch (target.cpu.arch) {
+                .mipsel => .musl,
+                else => .musleabi,
+            },
             .musleabihf => .musleabihf,
             .msvc => .msvc,
             .ohos => .ohos,
