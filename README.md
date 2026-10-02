@@ -27,9 +27,9 @@ const crate_artifacts = build_crab.addCargoBuild(
         },
     },
     .{
-        // Set to .Debug to see debug logs,
+        // Set to .debug to see debug logs,
         // defaults to the same optimization level as your package.
-        .optimize = .ReleaseSafe,
+        .optimize = .safe,
     },
 );
 

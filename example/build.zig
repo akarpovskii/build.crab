@@ -25,7 +25,7 @@ pub fn build(b: *std.Build) void {
 pub fn linkRustLibrary(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
+    optimize: std.lang.OptimizeMode,
     folder: []const u8,
     zigbuild: bool,
 ) *std.Build.Step.Run {
@@ -70,7 +70,7 @@ pub fn linkRustLibrary(
 pub fn addCargoBuild(
     b: *std.Build,
     target: std.Build.ResolvedTarget,
-    optimize: std.builtin.OptimizeMode,
+    optimize: std.lang.OptimizeMode,
 ) *std.Build.Step.Run {
     const artifacts = @import("build_crab").addCargoBuild(
         b,
@@ -93,9 +93,10 @@ pub fn addCargoBuild(
         "hello_world";
 
     const installed = b.addInstallBinFile(artifacts.path(b, exe_name), exe_name);
-    const run_hello_world = b.addSystemCommand(&.{
-        b.getInstallPath(installed.dir, installed.dest_rel_path),
-    });
+    const run_hello_world = b.addRunFile(.{ .relative = .{
+        .base = .install_bin,
+        .sub_path = installed.dest_rel_path,
+    } });
     run_hello_world.step.dependOn(&installed.step);
 
     run_hello_world.expectStdOutEqual("I'm using the library: 3\n");
