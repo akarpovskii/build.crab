@@ -32,10 +32,7 @@ pub fn build(b: *std.Build) void {
     b.installArtifact(build_crab);
     const run_build_crab = b.addRunArtifact(build_crab);
     run_build_crab.step.dependOn(b.getInstallStep());
-
-    if (b.args) |args| {
-        run_build_crab.addArgs(args);
-    }
+    run_build_crab.addPassthruArgs();
 
     const run_step = b.step("run", "Run the app");
     run_step.dependOn(&run_build_crab.step);
@@ -68,9 +65,10 @@ const CargoConfig = struct {
 
         pub fn override(self: PartialTarget, target: BuildCrab.rust.Target) BuildCrab.rust.Target {
             var result = target;
-            inline for (@typeInfo(@TypeOf(self)).@"struct".fields) |field| {
-                const sf = @field(self, field.name);
-                const rf = &@field(result, field.name);
+            const info = @typeInfo(PartialTarget).@"struct";
+            inline for (info.field_names) |field_name| {
+                const sf = @field(self, field_name);
+                const rf = &@field(result, field_name);
                 if (sf) |non_null| {
                     rf.* = non_null;
                 }
@@ -146,8 +144,9 @@ const StaticlibConfig = struct {
 };
 
 fn targetFromUserInputOptions(args: anytype) std.Target {
-    inline for (@typeInfo(@TypeOf(args)).@"struct".fields) |field| {
-        const v = @field(args, field.name);
+    const info = @typeInfo(@TypeOf(args)).@"struct";
+    inline for (info.field_names) |field_name| {
+        const v = @field(args, field_name);
         const T = @TypeOf(v);
         switch (T) {
             std.Target.Query => return std.zig.system.resolveTargetQuery(v) catch
@@ -163,9 +162,10 @@ fn targetFromUserInputOptions(args: anytype) std.Target {
 fn overrideTargetUserInput(args: anytype) @TypeOf(args) {
     var new_args = args;
     const host_target = @import("builtin").target;
-    inline for (@typeInfo(@TypeOf(args)).@"struct".fields) |field| {
-        const v = &@field(new_args, field.name);
-        const T = field.type;
+    const info = @typeInfo(@TypeOf(args)).@"struct";
+    inline for (info.field_names, info.field_types) |field_name, field_type| {
+        const v = &@field(new_args, field_name);
+        const T = field_type;
         switch (T) {
             std.Target.Query => {
                 v.* = std.Target.Query.fromTarget(&host_target);
